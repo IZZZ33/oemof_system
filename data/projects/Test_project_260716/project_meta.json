@@ -1,0 +1,13 @@
+{
+  "project_name": "Test_project_260716",
+  "project_city_name": "lehrte",
+  "project_climate_zone": "Zone 1",
+  "project_coords": [
+    52.3749334,
+    9.9748557
+  ],
+  "project_zoom": 14,
+  "route_length": 414.91989156182626,
+  "route_length_source": "OSM area estimate",
+  "heated_area_factor": 0.8
+}

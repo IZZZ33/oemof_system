@@ -1,0 +1,13 @@
+{
+  "project_name": "Test_project_260721",
+  "project_city_name": "Hannover",
+  "project_climate_zone": "Zone 1",
+  "project_coords": [
+    52.37497039455815,
+    9.745559692382814
+  ],
+  "project_zoom": 12,
+  "route_length": 271.76111278220935,
+  "route_length_source": "building-demand area estimate",
+  "heated_area_factor": 0.8
+}

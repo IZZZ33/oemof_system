@@ -1,0 +1,294 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="89692773-a293-4dcc-8d7e-94b7f7c84977" name="Changes" comment="add meta data to excel">
+      <change afterPath="$PROJECT_DIR$/logic/data_input.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/data/example/MDC.xlsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/data/example/SubWW_v4.xlsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/data/example/example.xlsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/logic/API.py" beforeDir="false" afterPath="$PROJECT_DIR$/logic/API.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/logic/custom_constraints.py" beforeDir="false" afterPath="$PROJECT_DIR$/logic/custom_constraints.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/logic/post.py" beforeDir="false" afterPath="$PROJECT_DIR$/logic/post.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/logic/pre.py" beforeDir="false" afterPath="$PROJECT_DIR$/logic/pre.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/logic/sim.py" beforeDir="false" afterPath="$PROJECT_DIR$/logic/sim.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/requirements.txt" beforeDir="false" afterPath="$PROJECT_DIR$/requirements.txt" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="Python Script" />
+      </list>
+    </option>
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_BRANCH_BY_REPOSITORY">
+      <map>
+        <entry key="$PROJECT_DIR$" value="main" />
+      </map>
+    </option>
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+    <option name="UPDATE_TYPE" value="REBASE" />
+  </component>
+  <component name="MarkdownSettingsMigration">
+    <option name="stateVersion" value="1" />
+  </component>
+  <component name="ProjectId" id="2M61QBL3dNF3imNM1u1h5iG4Zhq" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;RunOnceActivity.OpenProjectViewOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;last_opened_file_path&quot;: &quot;C:/Users/ShixinNi/Documents/GitHub/oemof-hri_240925&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable&quot;
+  }
+}</component>
+  <component name="RecentsManager">
+    <key name="CopyFile.RECENT_KEYS">
+      <recent name="C:\Users\ShixinNi\Documents\GitHub" />
+      <recent name="C:\Users\ShixinNi\Documents\GitHub\oemof-hri\data\example" />
+    </key>
+  </component>
+  <component name="RunManager" selected="Python.oemof-hri">
+    <configuration name="oemof-hri" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="oemof-hri" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="C:\ProgramData\Anaconda3\envs\venv_autom_oemof_v05_2\python.exe" />
+      <option name="SDK_NAME" value="venv_autom_oemof_v05_2" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+      <option name="IS_MODULE_SDK" value="false" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/oemof-hri.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="test" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="oemof-hri" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/logic" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/logic/test.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <recent_temporary>
+      <list>
+        <item itemvalue="Python.oemof-hri" />
+        <item itemvalue="Python.test" />
+      </list>
+    </recent_temporary>
+  </component>
+  <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="89692773-a293-4dcc-8d7e-94b7f7c84977" name="Changes" comment="" />
+      <created>1677073200194</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1677073200194</updated>
+    </task>
+    <task id="LOCAL-00001" summary="implement new chp constraint">
+      <created>1679314358794</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1679314358794</updated>
+    </task>
+    <task id="LOCAL-00002" summary="passe standard skript für SubWW an">
+      <created>1682339156251</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1682339156251</updated>
+    </task>
+    <task id="LOCAL-00003" summary="implement new WNS40 limit constraint">
+      <created>1682340386513</created>
+      <option name="number" value="00003" />
+      <option name="presentableId" value="LOCAL-00003" />
+      <option name="project" value="LOCAL" />
+      <updated>1682340386513</updated>
+    </task>
+    <task id="LOCAL-00004" summary="implement new WNS40 limit">
+      <created>1682341056098</created>
+      <option name="number" value="00004" />
+      <option name="presentableId" value="LOCAL-00004" />
+      <option name="project" value="LOCAL" />
+      <updated>1682341056098</updated>
+    </task>
+    <task id="LOCAL-00005" summary="implement new storage">
+      <created>1682341087795</created>
+      <option name="number" value="00005" />
+      <option name="presentableId" value="LOCAL-00005" />
+      <option name="project" value="LOCAL" />
+      <updated>1682341087795</updated>
+    </task>
+    <task id="LOCAL-00006" summary="export results to excel file">
+      <created>1682415406130</created>
+      <option name="number" value="00006" />
+      <option name="presentableId" value="LOCAL-00006" />
+      <option name="project" value="LOCAL" />
+      <updated>1682415406130</updated>
+    </task>
+    <task id="LOCAL-00007" summary="export results to excel file">
+      <created>1683020993951</created>
+      <option name="number" value="00007" />
+      <option name="presentableId" value="LOCAL-00007" />
+      <option name="project" value="LOCAL" />
+      <updated>1683020993951</updated>
+    </task>
+    <task id="LOCAL-00008" summary="add max. and min. limits to investment of storage">
+      <created>1683282242647</created>
+      <option name="number" value="00008" />
+      <option name="presentableId" value="LOCAL-00008" />
+      <option name="project" value="LOCAL" />
+      <updated>1683282242647</updated>
+    </task>
+    <task id="LOCAL-00009" summary="excel input">
+      <created>1683282293186</created>
+      <option name="number" value="00009" />
+      <option name="presentableId" value="LOCAL-00009" />
+      <option name="project" value="LOCAL" />
+      <updated>1683282293186</updated>
+    </task>
+    <option name="localTasksCounter" value="10" />
+    <servers />
+  </component>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="TAB_STATES">
+      <map>
+        <entry key="54c2d285-efd1-420b-99a3-e88d94e1354d">
+          <value>
+            <State>
+              <option name="SHOW_ONLY_AFFECTED_CHANGES" value="true" />
+              <option name="FILTERS">
+                <map>
+                  <entry key="branch">
+                    <value>
+                      <list>
+                        <option value="HEAD" />
+                      </list>
+                    </value>
+                  </entry>
+                  <entry key="structure">
+                    <value>
+                      <list>
+                        <option value="dir:C:/Users/ShixinNi/Documents/GitHub/oemof-hri/results/SubWW_Amin/source" />
+                      </list>
+                    </value>
+                  </entry>
+                </map>
+              </option>
+            </State>
+          </value>
+        </entry>
+        <entry key="7c30c0d1-efa3-4ea5-9f93-137ebf0a84b5">
+          <value>
+            <State>
+              <option name="SHOW_ONLY_AFFECTED_CHANGES" value="true" />
+              <option name="FILTERS">
+                <map>
+                  <entry key="branch">
+                    <value>
+                      <list>
+                        <option value="HEAD" />
+                      </list>
+                    </value>
+                  </entry>
+                  <entry key="roots">
+                    <value>
+                      <list>
+                        <option value="$PROJECT_DIR$" />
+                      </list>
+                    </value>
+                  </entry>
+                </map>
+              </option>
+            </State>
+          </value>
+        </entry>
+        <entry key="MAIN">
+          <value>
+            <State>
+              <option name="CUSTOM_BOOLEAN_PROPERTIES">
+                <map>
+                  <entry key="Show.Git.Branches" value="true" />
+                </map>
+              </option>
+              <option name="FILTERS">
+                <map>
+                  <entry key="branch">
+                    <value>
+                      <list>
+                        <option value="HEAD" />
+                      </list>
+                    </value>
+                  </entry>
+                </map>
+              </option>
+            </State>
+          </value>
+        </entry>
+      </map>
+    </option>
+    <option name="OPEN_GENERIC_TABS">
+      <map>
+        <entry key="54c2d285-efd1-420b-99a3-e88d94e1354d" value="TOOL_WINDOW" />
+        <entry key="7c30c0d1-efa3-4ea5-9f93-137ebf0a84b5" value="TOOL_WINDOW" />
+      </map>
+    </option>
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="implement new chp constraint" />
+    <MESSAGE value="passe standard skript für SubWW an" />
+    <MESSAGE value="implement new WNS40 limit constraint" />
+    <MESSAGE value="implement new WNS40 limit" />
+    <MESSAGE value="implement new storage" />
+    <MESSAGE value="export results to excel file" />
+    <MESSAGE value="add max. and min. limits to investment of storage" />
+    <MESSAGE value="excel input" />
+    <option name="LAST_COMMIT_MESSAGE" value="excel input" />
+  </component>
+  <component name="XDebuggerManager">
+    <breakpoint-manager>
+      <breakpoints>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/logic/building_demand_analyse.py</url>
+          <line>3642</line>
+          <option name="timeStamp" value="4" />
+        </line-breakpoint>
+      </breakpoints>
+    </breakpoint-manager>
+  </component>
+</project>
