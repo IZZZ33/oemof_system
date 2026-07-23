@@ -15,9 +15,15 @@ The tool works best for locations in Germany and needs an internet connection to
 
 A technical administrator must install the required software once:
 
-1. Install the packages listed in `requirements.txt`.
-2. Install a supported calculation solver. CBC is recommended.
-3. Start the tool from this folder:
+1. Install Python 3.10.
+2. Install the packages listed in `requirements.txt`:
+
+   ```text
+   python -m pip install -r requirements.txt
+   ```
+
+3. Install Gurobi 12 and activate a valid Gurobi licence. The current simulation code uses the Gurobi solver.
+4. Start the tool from this folder:
 
    ```text
    python oemof-hri.py
