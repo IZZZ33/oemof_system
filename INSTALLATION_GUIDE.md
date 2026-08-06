@@ -155,6 +155,50 @@ If they are not shown, you are in the wrong folder. Locate the extracted folder
 in File Explorer, click its address bar, copy the full path, and use that path
 with `cd /d`.
 
+### Windows folder and file commands
+
+Anaconda Prompt uses the same basic commands as Windows Command Prompt:
+
+| Action | Command |
+|---|---|
+| Enter the repository | `cd /d "C:\path\to\oemof_system"` |
+| Show the current location | `cd` |
+| List files and folders | `dir` |
+| Display a text file | `type README.md` |
+| Move back one folder | `cd ..` |
+
+For example:
+
+```bat
+cd /d "C:\Users\YOUR_NAME\Documents\oemof_system"
+dir
+type README.md
+```
+
+If the repository was downloaded as a ZIP, its extracted folder may be named
+`oemof_system-main`:
+
+```bat
+cd /d "C:\Users\YOUR_NAME\Downloads\oemof_system-main"
+```
+
+The `/d` option allows the command to change both the folder and the drive, for
+example from drive `C:` to drive `D:`. Paths containing spaces must be enclosed
+in quotation marks.
+
+In Windows PowerShell, the corresponding commands are:
+
+```powershell
+cd "C:\Users\YOUR_NAME\Documents\oemof_system"
+pwd
+ls
+cat README.md
+cd ..
+```
+
+PowerShell accepts `cd`, `ls`, and `cat` as aliases. Pressing **Tab** while
+typing a folder name can complete the name automatically.
+
 ## Part 5 — Create the Conda environment
 
 Make sure Anaconda Prompt is still in the folder containing `environment.yml`,

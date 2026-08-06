@@ -79,6 +79,47 @@ ls
 
 The output should include `environment.yml`, `oemof-hri.py`, and `start.sh`.
 
+### macOS and Linux folder and file commands
+
+The same Terminal commands work on macOS and Linux:
+
+| Action | Command |
+|---|---|
+| Enter the repository | `cd ~/Documents/oemof_system` |
+| Show the current location | `pwd` |
+| List files and folders | `ls` |
+| Display a text file | `cat README.md` |
+| Move back one folder | `cd ..` |
+
+For example:
+
+```bash
+cd ~/Documents/oemof_system
+pwd
+ls
+cat README.md
+```
+
+For an extracted GitHub ZIP, use its actual folder name:
+
+```bash
+cd ~/Downloads/oemof_system-main
+```
+
+Useful path symbols:
+
+- `~` means your home folder.
+- `.` means the current folder.
+- `..` means the parent folder.
+- Paths containing spaces must be enclosed in quotation marks. Use `$HOME`
+  instead of `~` inside quotation marks, for example:
+
+  ```bash
+  cd "$HOME/Documents/Heating Tool/oemof_system"
+  ```
+
+Pressing **Tab** while typing a folder name can complete it automatically.
+
 ## 4 — Create the environment
 
 From the repository folder, run:
@@ -197,4 +238,3 @@ python -m pip check
 - [Installing Conda on macOS](https://docs.conda.io/projects/conda/en/stable/user-guide/install/macos.html)
 - [Installing Gurobi for Python](https://support.gurobi.com/hc/en-us/articles/360044290292-How-do-I-install-Gurobi-for-Python)
 - [Gurobi on Apple Silicon](https://support.gurobi.com/hc/en-us/articles/4409801941521-How-do-I-use-gurobipy-on-Apple-Silicon-and-Monterey-macOS-12)
-
