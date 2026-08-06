@@ -10,6 +10,7 @@ import shutil
 import glob
 import json
 import atexit
+import traceback
 from logic.utilities import create_folder, natural_sort_key
 
 from logic.project_paths import (
@@ -187,6 +188,7 @@ if __name__ == '__main__':
             )
             raise
         except Exception as exc:
+            error_traceback = traceback.format_exc()
             write_run_status(
                 submitted_project,
                 "failed",
@@ -197,3 +199,4 @@ if __name__ == '__main__':
                 error=str(exc),
             )
             print(f"Simulation failed for project {submitted_project!r}: {exc}")
+            print(error_traceback, file=sys.stderr)
