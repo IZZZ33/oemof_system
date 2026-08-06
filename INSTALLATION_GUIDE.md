@@ -155,50 +155,6 @@ If they are not shown, you are in the wrong folder. Locate the extracted folder
 in File Explorer, click its address bar, copy the full path, and use that path
 with `cd /d`.
 
-### Windows folder and file commands
-
-Anaconda Prompt uses the same basic commands as Windows Command Prompt:
-
-| Action | Command |
-|---|---|
-| Enter the repository | `cd /d "C:\path\to\oemof_system"` |
-| Show the current location | `cd` |
-| List files and folders | `dir` |
-| Display a text file | `type README.md` |
-| Move back one folder | `cd ..` |
-
-For example:
-
-```bat
-cd /d "C:\Users\YOUR_NAME\Documents\oemof_system"
-dir
-type README.md
-```
-
-If the repository was downloaded as a ZIP, its extracted folder may be named
-`oemof_system-main`:
-
-```bat
-cd /d "C:\Users\YOUR_NAME\Downloads\oemof_system-main"
-```
-
-The `/d` option allows the command to change both the folder and the drive, for
-example from drive `C:` to drive `D:`. Paths containing spaces must be enclosed
-in quotation marks.
-
-In Windows PowerShell, the corresponding commands are:
-
-```powershell
-cd "C:\Users\YOUR_NAME\Documents\oemof_system"
-pwd
-ls
-cat README.md
-cd ..
-```
-
-PowerShell accepts `cd`, `ls`, and `cat` as aliases. Pressing **Tab** while
-typing a folder name can complete the name automatically.
-
 ## Part 5 — Create the Conda environment
 
 Make sure Anaconda Prompt is still in the folder containing `environment.yml`,
@@ -254,12 +210,96 @@ python -c "import gurobipy as gp; env=gp.Env(); print('Gurobi licence is working
 You should see `Gurobi licence is working`. Informational Gurobi text may appear
 before it; that is normal.
 
+To check which Gurobi installation and licence are visible in the activated
+environment, enter:
+
+```bat
+where python
+where gurobi_cl
+where /r "%CONDA_PREFIX%" gurobi.lic
+python -c "import gurobipy; print(gurobipy.__file__)"
+```
+
+`where gurobi_cl` may be empty after a pip-only installation; that is acceptable
+when the `gurobipy` test succeeds because the application uses the Python-native
+interface first. If `gurobi.lic` is stored in a nonstandard location, select it
+for the current Anaconda Prompt before starting the application:
+
+```bat
+set "GRB_LICENSE_FILE=C:\full\path\to\gurobi.lic"
+```
+
+If the Python interface is unavailable but `gurobi_cl.exe` exists, its exact
+location can also be supplied:
+
+```bat
+set "OEMOF_GUROBI_PATH=C:\full\path\to\gurobi_cl.exe"
+```
+
+These `set` commands apply only to the current prompt. To store the licence path
+for this Conda environment, use:
+
+```bat
+conda env config vars set "GRB_LICENSE_FILE=C:\full\path\to\gurobi.lic"
+conda deactivate
+conda activate oemof-system
+```
+
+Users of a licence server or Web License Service should retain the settings
+provided by their licence administrator instead of selecting a local file. The
+application respects an existing `GRB_LICENSE_FILE` value and does not replace
+it.
+
 If the test reports that the model is too large for the licence, a size-limited
 licence is active instead of the required academic or commercial licence. If it
 reports that no licence can be found, repeat Part 2.3 or ask your licence
 administrator for help.
 
 ## Part 7 — Start the complete program
+
+### Move to the repository before starting
+
+Anaconda Prompt uses the same basic commands as Windows Command Prompt:
+
+| Action | Command |
+|---|---|
+| Enter the repository | `cd /d "C:\path\to\oemof_system"` |
+| Show the current location | `cd` |
+| List files and folders | `dir` |
+| Display a text file | `type README.md` |
+| Move back one folder | `cd ..` |
+
+For example:
+
+```bat
+cd /d "C:\Users\YOUR_NAME\Documents\oemof_system"
+dir
+type README.md
+```
+
+If the repository was downloaded as a ZIP, its extracted folder may be named
+`oemof_system-main`:
+
+```bat
+cd /d "C:\Users\YOUR_NAME\Downloads\oemof_system-main"
+```
+
+The `/d` option allows the command to change both the folder and the drive, for
+example from drive `C:` to drive `D:`. Paths containing spaces must be enclosed
+in quotation marks.
+
+In Windows PowerShell, the corresponding commands are:
+
+```powershell
+cd "C:\Users\YOUR_NAME\Documents\oemof_system"
+pwd
+ls
+cat README.md
+cd ..
+```
+
+PowerShell accepts `cd`, `ls`, and `cat` as aliases. Pressing **Tab** while
+typing a folder name can complete it automatically.
 
 Each time you start the application:
 
@@ -404,6 +444,11 @@ python -m pip install gurobipy==12.0.1
 If importing works but the licence test fails, reactivate the licence with the
 private `grbgetkey` command from your Gurobi account or contact your licence
 administrator.
+
+If `gurobi_cl` or the licence is installed in a nonstandard location, use the
+`where` and `set` commands in Part 6. Set the variables and start
+`python oemof-hri.py` in the same Anaconda Prompt. Restart an application that
+was already running, because it cannot receive variables set afterward.
 
 ### The browser does not open
 

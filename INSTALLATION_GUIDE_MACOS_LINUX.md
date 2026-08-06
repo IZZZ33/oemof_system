@@ -79,7 +79,73 @@ ls
 
 The output should include `environment.yml`, `oemof-hri.py`, and `start.sh`.
 
-### macOS and Linux folder and file commands
+## 4 — Create the environment
+
+From the repository folder, run:
+
+```bash
+conda env create --file environment.yml
+conda activate oemof-system
+python --version
+python -m pip check
+```
+
+Python should report version 3.10.
+
+Install the tested Gurobi Python package into this environment:
+
+```bash
+python -m pip install gurobipy==12.0.1
+```
+
+Test the package and licence:
+
+```bash
+python -c "import gurobipy as gp; env=gp.Env(); print('Gurobi licence is working'); env.dispose()"
+```
+
+Check what the active environment can find:
+
+```bash
+which python
+command -v gurobi_cl
+python -c "import gurobipy; print(gurobipy.__file__)"
+find "$CONDA_PREFIX" "$HOME" -name gurobi.lic -type f 2>/dev/null
+```
+
+If the last command reports a licence inside the environment, export its exact
+path before starting the application. For example:
+
+```bash
+export GRB_LICENSE_FILE="$CONDA_PREFIX/lib/gurobi.lic"
+```
+
+If the Python interface is unavailable but `gurobi_cl` works, explicitly expose
+the command-line solver:
+
+```bash
+export OEMOF_GUROBI_PATH="$(command -v gurobi_cl)"
+```
+
+Run these commands in the same Terminal that starts `python oemof-hri.py`.
+Environment variables exported after the application has started are not passed
+to the running process, so stop and restart it after changing them.
+
+To persist a local licence path only for this Conda environment:
+
+```bash
+conda env config vars set GRB_LICENSE_FILE="$CONDA_PREFIX/lib/gurobi.lic"
+conda deactivate
+conda activate oemof-system
+```
+
+Replace the example path with the path returned by `find`. Users of a licence
+server or Web License Service should keep the configuration supplied by their
+licence administrator instead of exporting a local file.
+
+## 5 — Start the complete application
+
+### Move to the repository before starting
 
 The same Terminal commands work on macOS and Linux:
 
@@ -119,33 +185,6 @@ Useful path symbols:
   ```
 
 Pressing **Tab** while typing a folder name can complete it automatically.
-
-## 4 — Create the environment
-
-From the repository folder, run:
-
-```bash
-conda env create --file environment.yml
-conda activate oemof-system
-python --version
-python -m pip check
-```
-
-Python should report version 3.10.
-
-Install the tested Gurobi Python package into this environment:
-
-```bash
-python -m pip install gurobipy==12.0.1
-```
-
-Test the package and licence:
-
-```bash
-python -c "import gurobipy as gp; env=gp.Env(); print('Gurobi licence is working'); env.dispose()"
-```
-
-## 5 — Start the complete application
 
 The platform-independent command is:
 
@@ -212,6 +251,8 @@ The path should point into an environment named `oemof-system`.
 Check the licence using the Gurobi command supplied for your licence type. A
 named-user licence is commonly stored at `~/gurobi.lic`. For another location,
 follow Gurobi's instructions for the `GRB_LICENSE_FILE` environment variable.
+The discovery and `export` commands in Section 4 show how to select a licence
+stored inside the active Conda environment.
 
 ### The browser does not open
 

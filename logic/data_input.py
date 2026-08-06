@@ -36,6 +36,7 @@ from logic.project_paths import (
 from logic.project_run_state import (
     project_input_fingerprint, read_run_status, results_match_current_inputs, write_run_status,
 )
+from logic.utilities import natural_sort_key
 from logic.building_demand_analyse import _to_bool_series
 from logic.dwd_weather import (
     get_location_weather,
@@ -3516,7 +3517,10 @@ def list_scenarios(project_name: str | None = None):
     scen_dir = get_scenario_dir_for_project(proj)
     if not os.path.exists(scen_dir):
         return []
-    return [f[:-5] for f in os.listdir(scen_dir) if f.endswith(".xlsx")]
+    return sorted(
+        (f[:-5] for f in os.listdir(scen_dir) if f.lower().endswith(".xlsx")),
+        key=natural_sort_key,
+    )
 
 def get_scenario_file(name: str, project_name: str | None = None):
     """Get the full path to a scenario file for the given (or current) project."""

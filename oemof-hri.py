@@ -10,7 +10,7 @@ import shutil
 import glob
 import json
 import atexit
-from logic.utilities import create_folder
+from logic.utilities import create_folder, natural_sort_key
 
 from logic.project_paths import (
     get_scenario_dir_for_project,
@@ -43,7 +43,10 @@ def list_scenarios_for_project(project_name: str):
     scen_dir = get_scenario_dir_for_project(project_name)
     if not os.path.exists(scen_dir):
         return []
-    return [f for f in os.listdir(scen_dir) if f.endswith(".xlsx")]
+    return sorted(
+        (f for f in os.listdir(scen_dir) if f.lower().endswith(".xlsx")),
+        key=natural_sort_key,
+    )
 
 def archive_project_results(project_name: str) -> None:
     """Archive result artifacts while retaining the current run-status file."""

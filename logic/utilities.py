@@ -1,9 +1,18 @@
 import os
+import re
 import shutil
 import numpy as np
 import pandas as pd
 from pandas.plotting import register_matplotlib_converters
 register_matplotlib_converters()
+
+
+def natural_sort_key(value):
+    """Sort names containing numbers as people expect (S2 before S10)."""
+    return [
+        int(part) if part.isdigit() else part.casefold()
+        for part in re.split(r"(\d+)", str(value))
+    ]
 
 
 def create_folder(path):

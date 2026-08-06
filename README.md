@@ -57,7 +57,7 @@ python -m pip install -r requirements.txt
 
 ### Install Gurobi and start the tool
 
-1. Install Gurobi and activate a valid Gurobi licence. Gurobi is not installed by `environment.yml` because its installation and licence are managed separately. The environment and installation folders may have any names. The application first uses the Python-native `gurobi_direct` interface when `gurobipy` is installed. Otherwise, it detects the external Gurobi launcher through `PATH`, `GUROBI_HOME`, standard Windows installation folders, and Conda roots. For an unusual installation, set `OEMOF_GUROBI_PATH` to the Gurobi `bin` directory or directly to its `gurobi`/`gurobi.bat` launcher.
+1. Install Gurobi and activate a valid Gurobi licence. Gurobi is not installed by `environment.yml` because its installation and licence are managed separately. The environment and installation folders may have any names. The application first uses the Python-native `gurobi_direct` interface when `gurobipy` is installed. Otherwise, it detects the external `gurobi_cl` launcher through `PATH`, `GUROBI_HOME`, standard installation folders, and the active Conda environment. For an unusual installation, set `OEMOF_GUROBI_PATH` to the Gurobi `bin` directory or directly to `gurobi_cl`.
 2. Start the tool from the repository:
 
    ```text
@@ -74,6 +74,18 @@ conda activate YOUR_ENVIRONMENT_NAME
 python -c "import sys; print(sys.executable)"
 python oemof-hri.py
 ```
+
+For a licence stored inside the environment, set its exact location before
+starting the application. For example, on macOS/Linux:
+
+```text
+find "$CONDA_PREFIX" -name gurobi.lic -type f
+export GRB_LICENSE_FILE="$CONDA_PREFIX/lib/gurobi.lic"
+```
+
+On Windows Anaconda Prompt, use `where /r "%CONDA_PREFIX%" gurobi.lic` and
+`set "GRB_LICENSE_FILE=C:\full\path\to\gurobi.lic"`. The application also
+recognizes `gurobi_cl` on `PATH`, `GUROBI_HOME`, and `OEMOF_GUROBI_PATH`.
 
 The repository itself may also be stored under any folder name or location.
 Application data, templates, and results are resolved relative to the downloaded

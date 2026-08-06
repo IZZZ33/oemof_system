@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
-from datetime import datetime, timezone
+import struct
+from datetime import date, datetime, time, timezone
 from pathlib import Path
 
 from logic.project_paths import get_project_dir, get_project_results_dir, get_results_root
@@ -17,19 +19,152 @@ _IGNORED_INPUT_FILES = {
     # Durable download cache. The weather values that affect a simulation are
     # already stored in each scenario workbook and are fingerprinted there.
     "dwd_weather.json",
+    # Files created by operating systems and file browsers are not model inputs.
+    ".DS_Store",
+    "Thumbs.db",
+    "desktop.ini",
 }
+
+_TEXT_INPUT_SUFFIXES = {".csv", ".tsv", ".txt"}
+_JSON_INPUT_SUFFIXES = {".json", ".geojson"}
+_SEMANTIC_DIGEST_CACHE: dict[str, tuple[int, int, bytes]] = {}
+
+
+def _is_transient_input_file(path: Path) -> bool:
+    """Return whether *path* is an editor/office artefact, not a model input."""
+    name = path.name
+    return (
+        name in _IGNORED_INPUT_FILES
+        or name.startswith("~$")  # Microsoft Office owner/lock file
+        or name.endswith((".tmp", ".temp", ".swp"))
+    )
+
+
+def _input_files(root: Path):
+    return sorted(
+        (p for p in root.rglob("*") if p.is_file() and not _is_transient_input_file(p)),
+        key=lambda p: p.relative_to(root).as_posix(),
+    )
+
+
+def _update_tagged(digest, tag: bytes, value: bytes) -> None:
+    digest.update(tag)
+    digest.update(len(value).to_bytes(8, "big"))
+    digest.update(value)
+
+
+def _cell_value_bytes(value) -> bytes:
+    """Encode an Excel cell value without workbook/ZIP metadata."""
+    if isinstance(value, bool):
+        return b"bool:true" if value else b"bool:false"
+    if isinstance(value, int):
+        return b"int:" + str(value).encode("ascii")
+    if isinstance(value, float):
+        if math.isnan(value):
+            return b"float:nan"
+        if math.isinf(value):
+            return b"float:+inf" if value > 0 else b"float:-inf"
+        return b"float:" + struct.pack(">d", value)
+    if isinstance(value, (datetime, date, time)):
+        return b"datetime:" + value.isoformat().encode("utf-8")
+    if isinstance(value, bytes):
+        return b"bytes:" + value
+    if isinstance(value, str):
+        value = value.replace("\r\n", "\n").replace("\r", "\n")
+        return b"str:" + value.encode("utf-8")
+    return (f"{type(value).__name__}:{value}").encode("utf-8")
+
+
+def _xlsx_content_digest(path: Path) -> bytes:
+    """Hash workbook names, formulas, and cell values, but not Excel metadata."""
+    from openpyxl import load_workbook
+
+    digest = hashlib.sha256()
+    workbook = load_workbook(path, read_only=True, data_only=False)
+    try:
+        for worksheet in workbook.worksheets:
+            _update_tagged(digest, b"sheet", worksheet.title.encode("utf-8"))
+            for row in worksheet.iter_rows():
+                for cell in row:
+                    if cell.value is None:
+                        continue
+                    _update_tagged(digest, b"cell", cell.coordinate.encode("ascii"))
+                    _update_tagged(digest, b"value", _cell_value_bytes(cell.value))
+    finally:
+        workbook.close()
+    return digest.digest()
+
+
+def _file_content_digest(path: Path) -> bytes:
+    """Return a portable digest of the input content that affects the model."""
+    stat = path.stat()
+    cache_key = str(path.resolve())
+    cached = _SEMANTIC_DIGEST_CACHE.get(cache_key)
+    if cached and cached[:2] == (stat.st_mtime_ns, stat.st_size):
+        return cached[2]
+
+    suffix = path.suffix.lower()
+    if suffix == ".xlsx":
+        result = _xlsx_content_digest(path)
+    elif suffix in _JSON_INPUT_SUFFIXES:
+        try:
+            with path.open("r", encoding="utf-8-sig") as stream:
+                value = json.load(stream)
+            canonical = json.dumps(
+                value, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+            ).encode("utf-8")
+            result = hashlib.sha256(canonical).digest()
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            result = _raw_file_digest(path)
+    elif suffix in _TEXT_INPUT_SUFFIXES:
+        try:
+            text = path.read_text(encoding="utf-8-sig")
+            canonical = text.replace("\r\n", "\n").replace("\r", "\n")
+            result = hashlib.sha256(canonical.encode("utf-8")).digest()
+        except UnicodeDecodeError:
+            result = _raw_file_digest(path)
+    else:
+        result = _raw_file_digest(path)
+
+    _SEMANTIC_DIGEST_CACHE[cache_key] = (stat.st_mtime_ns, stat.st_size, result)
+    return result
+
+
+def _raw_file_digest(path: Path) -> bytes:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.digest()
 
 
 def project_input_fingerprint(project_name: str) -> str:
-    """Hash all durable project inputs, independent of file timestamps."""
+    """Hash model-relevant input content in a machine-independent form.
+
+    Excel ZIP metadata, workbook formatting, line-ending differences, and
+    temporary Office/OS files are intentionally excluded. Actual cell values,
+    formulas, filenames, and other durable input content remain significant.
+    """
     root = Path(get_project_dir(project_name))
     digest = hashlib.sha256()
     if not root.exists():
         return digest.hexdigest()
 
-    for path in sorted((p for p in root.rglob("*") if p.is_file()), key=lambda p: p.as_posix()):
-        if path.name in _IGNORED_INPUT_FILES:
-            continue
+    for path in _input_files(root):
+        relative = path.relative_to(root).as_posix().encode("utf-8")
+        _update_tagged(digest, b"path", relative)
+        _update_tagged(digest, b"content", _file_content_digest(path))
+    return digest.hexdigest()
+
+
+def _legacy_project_input_fingerprint(project_name: str) -> str:
+    """Reproduce the former raw-byte hash for already simulated projects."""
+    root = Path(get_project_dir(project_name))
+    digest = hashlib.sha256()
+    if not root.exists():
+        return digest.hexdigest()
+
+    for path in _input_files(root):
         relative = path.relative_to(root).as_posix().encode("utf-8")
         digest.update(len(relative).to_bytes(4, "big"))
         digest.update(relative)
@@ -193,4 +328,11 @@ def recover_interrupted_run_statuses(
 def results_match_current_inputs(project_name: str, status: dict | None = None) -> bool:
     status = status or read_run_status(project_name)
     completed_fingerprint = status.get("input_fingerprint") if status.get("state") == "completed" else None
-    return bool(completed_fingerprint) and completed_fingerprint == project_input_fingerprint(project_name)
+    if not completed_fingerprint:
+        return False
+    if completed_fingerprint == project_input_fingerprint(project_name):
+        return True
+    # Status files written before portable fingerprints were introduced contain
+    # a raw-byte hash. Keep those results valid as long as the old inputs really
+    # are unchanged; transient Excel and OS files are still ignored.
+    return completed_fingerprint == _legacy_project_input_fingerprint(project_name)

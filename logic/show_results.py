@@ -249,7 +249,10 @@ class MultiScenarioViewer:
             st.warning(f"No results folder found for project '{project_name}': {project_root}")
             return scenario_data
 
-        for scenario_dir in project_root.iterdir():
+        scenario_dirs = sorted(
+            project_root.iterdir(), key=lambda path: self.natural_key(path.name)
+        )
+        for scenario_dir in scenario_dirs:
             if not scenario_dir.is_dir():
                 continue
 
@@ -270,7 +273,7 @@ class MultiScenarioViewer:
         return scenario_data
 
     def get_scenario_colors(self):
-        scenarios = sorted(self.scenario_data.keys())
+        scenarios = sorted(self.scenario_data.keys(), key=self.natural_key)
         if not scenarios:
             return {}
         colors = sns.color_palette("Set2", n_colors=len(scenarios)).as_hex()
@@ -551,7 +554,10 @@ class MultiScenarioViewer:
                 f"{format_pv_value(row['Installed PV capacity (kWp)'], 'kWp')}, "
                 f"{format_pv_value(row['Installed PV collector area (m²)'], 'm²')} installed "
                 f"of {format_pv_value(row['Maximum PV collector area (m²)'], 'm²')} maximum"
-                for _, row in df_pv_area.sort_values("Scenario").iterrows()
+                for _, row in sorted(
+                    df_pv_area.iterrows(),
+                    key=lambda item: self.natural_key(item[1]["Scenario"]),
+                )
             )
             st.caption(f"PV investment — {area_text}.")
 

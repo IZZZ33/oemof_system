@@ -13,22 +13,91 @@ import logic.custom_constraints as custom_constraints
 from oemof.network.graph import create_nx_graph
 
 
+def _gurobi_environment_roots() -> list[Path]:
+    """Return active Conda/virtual-environment roots without duplicates."""
+    roots = []
+    for value in (
+        os.environ.get("CONDA_PREFIX"),
+        os.environ.get("VIRTUAL_ENV"),
+        sys.prefix,
+    ):
+        if not value:
+            continue
+        root = Path(value).expanduser()
+        if root not in roots:
+            roots.append(root)
+
+    # Also inspect Conda base. Some installations keep Gurobi there while the
+    # application itself runs from a named environment.
+    for root in tuple(roots):
+        if root.parent.name.lower() == "envs" and root.parent.parent not in roots:
+            roots.append(root.parent.parent)
+    return roots
+
+
+def _configure_gurobi_license(executable: str | Path | None = None) -> str | None:
+    """Use an explicit licence, or discover a licence near Python/Gurobi."""
+    configured = os.environ.get("GRB_LICENSE_FILE")
+    if configured:
+        # Never override licence-server, WLS, or explicitly selected settings.
+        return configured
+
+    candidates = []
+    for root in _gurobi_environment_roots():
+        candidates.extend(
+            [
+                root / "gurobi.lic",
+                root / "lib" / "gurobi.lic",
+                root / "Library" / "gurobi.lic",
+                root / "Library" / "bin" / "gurobi.lic",
+                root / "share" / "gurobi" / "gurobi.lic",
+            ]
+        )
+
+    gurobi_home = os.environ.get("GUROBI_HOME")
+    if gurobi_home:
+        home = Path(os.path.expandvars(gurobi_home)).expanduser()
+        candidates.extend([home / "gurobi.lic", home.parent / "gurobi.lic"])
+
+    if executable:
+        executable_path = Path(executable).expanduser()
+        candidates.extend(
+            parent / "gurobi.lic"
+            for parent in list(executable_path.parents)[:4]
+        )
+
+    candidates.append(Path.home() / "gurobi.lic")
+    if os.name == "nt":
+        candidates.append(Path("C:/gurobi/gurobi.lic"))
+    elif sys.platform == "darwin":
+        candidates.append(Path("/Library/gurobi/gurobi.lic"))
+    else:
+        candidates.append(Path("/opt/gurobi/gurobi.lic"))
+
+    for candidate in candidates:
+        if candidate.is_file():
+            os.environ["GRB_LICENSE_FILE"] = str(candidate)
+            return str(candidate)
+    return None
+
+
 def _ensure_gurobi_available() -> str:
-    """Locate the Gurobi launcher required by Pyomo's shell interface."""
+    """Locate gurobi_cl for Pyomo's command-line solver interface."""
     launcher_names = (
-        ("gurobi.bat",)
+        ("gurobi_cl.exe", "gurobi_cl")
         if os.name == "nt"
-        else ("gurobi.sh",)
+        else ("gurobi_cl",)
     )
     for launcher_name in launcher_names:
         configured = shutil.which(launcher_name)
         if configured:
+            _configure_gurobi_license(configured)
             return configured
 
-    candidates = []
+    candidates: list[Path] = []
     explicit_path = os.environ.get("OEMOF_GUROBI_PATH")
     if explicit_path:
-        explicit = Path(explicit_path).expanduser()
+        explicit = Path(os.path.expandvars(explicit_path)).expanduser()
         candidates.extend(
             [explicit / name for name in launcher_names]
             if explicit.is_dir() else [explicit]
@@ -36,12 +105,28 @@ def _ensure_gurobi_available() -> str:
 
     gurobi_home = os.environ.get("GUROBI_HOME")
     if gurobi_home:
-        home = Path(gurobi_home).expanduser()
+        home = Path(os.path.expandvars(gurobi_home)).expanduser()
         for launcher_name in launcher_names:
             candidates.extend(
                 [
                     home / "bin" / launcher_name,
                     home / "win64" / "bin" / launcher_name,
+                    home / "macos_universal2" / "bin" / launcher_name,
+                    home / "linux64" / "bin" / launcher_name,
+                ]
+            )
+
+    # Conda packages place gurobi_cl inside the active environment. Usually its
+    # bin directory is already on PATH, but checking it explicitly also covers
+    # applications started from Finder, a desktop shortcut, or an IDE.
+    environment_roots = _gurobi_environment_roots()
+    for environment_root in environment_roots:
+        for launcher_name in launcher_names:
+            candidates.extend(
+                [
+                    environment_root / "bin" / launcher_name,
+                    environment_root / "Library" / "bin" / launcher_name,
+                    environment_root / launcher_name,
                 ]
             )
 
@@ -64,13 +149,32 @@ def _ensure_gurobi_available() -> str:
                 except OSError:
                     pass
 
-        # Conda may install the command-line solver in its base directory while
-        # the application runs from a separate named environment.
-        conda_prefix = Path(os.environ.get("CONDA_PREFIX", sys.prefix))
-        if conda_prefix.parent.name.lower() == "envs":
-            candidates.extend(
-                conda_prefix.parent.parent / name for name in launcher_names
-            )
+    elif sys.platform == "darwin":
+        for launcher_name in launcher_names:
+            for root in (Path("/Library"), Path("/opt"), Path.home()):
+                try:
+                    candidates.extend(
+                        sorted(
+                            root.glob(
+                                f"gurobi*/macos_universal2/bin/{launcher_name}"
+                            ),
+                            reverse=True,
+                        )
+                    )
+                except OSError:
+                    pass
+    else:
+        for launcher_name in launcher_names:
+            for root in (Path("/opt"), Path.home()):
+                try:
+                    candidates.extend(
+                        sorted(
+                            root.glob(f"gurobi*/linux64/bin/{launcher_name}"),
+                            reverse=True,
+                        )
+                    )
+                except OSError:
+                    pass
 
     seen = set()
     for candidate in candidates:
@@ -78,32 +182,19 @@ def _ensure_gurobi_available() -> str:
         candidate_key = os.path.normcase(str(candidate))
         if candidate_key in seen or not candidate.is_file():
             continue
+        if os.name != "nt" and not os.access(candidate, os.X_OK):
+            continue
         seen.add(candidate_key)
         os.environ["PATH"] = str(candidate.parent) + os.pathsep + os.environ.get(
             "PATH", ""
         )
-
-        # A portable installation may keep its licence beside the installation
-        # root rather than in the user's home folder.
-        install_root = candidate.parent
-        if install_root.name.lower() == "bin" and install_root.parent.name.lower() == "win64":
-            install_root = install_root.parent.parent
-        license_candidates = [
-            install_root / "gurobi.lic",
-            candidate.parent / "gurobi.lic",
-            Path.home() / "gurobi.lic",
-        ]
-        if "GRB_LICENSE_FILE" not in os.environ:
-            for license_file in license_candidates:
-                if license_file.is_file():
-                    os.environ["GRB_LICENSE_FILE"] = str(license_file)
-                    break
+        _configure_gurobi_license(candidate)
         return str(candidate)
 
     raise RuntimeError(
         "Gurobi could not be found. Install Gurobi, activate a valid licence, "
         "and add the Gurobi bin directory to PATH, set GUROBI_HOME, set "
-        "OEMOF_GUROBI_PATH to the launcher or bin directory, or install "
+        "OEMOF_GUROBI_PATH to gurobi_cl or its bin directory, or install "
         "gurobipy in the active Python environment. "
         f"The application is running with {sys.executable}."
     )
@@ -111,6 +202,7 @@ def _ensure_gurobi_available() -> str:
 
 def _gurobi_solver_configuration() -> tuple[str, str | None, str]:
     """Choose a Python-native solver first, then the external launcher."""
+    _configure_gurobi_license()
     try:
         from pyomo.environ import SolverFactory
 
