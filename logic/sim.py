@@ -6,6 +6,7 @@ import networkx as nx
 import matplotlib.pyplot as plt
 import logging
 import pickle
+import re
 from pathlib import Path
 import shutil
 import sys
@@ -203,18 +204,50 @@ def _ensure_gurobi_available() -> str:
 def _gurobi_solver_configuration() -> tuple[str, str | None, str]:
     """Choose a Python-native solver first, then the external launcher."""
     _configure_gurobi_license()
+    incompatible_direct_reason = None
     try:
         from pyomo.environ import SolverFactory
+        import pyomo
+        import gurobipy
 
-        direct_solver = SolverFactory("gurobi_direct")
-        if direct_solver.available(exception_flag=False):
-            import gurobipy
+        pyomo_numbers = tuple(
+            int(part) for part in re.findall(r"\d+", pyomo.__version__)[:3]
+        )
+        pyomo_version = pyomo_numbers + (0,) * (3 - len(pyomo_numbers))
+        gurobi_version = tuple(gurobipy.gurobi.version())
 
-            return "gurobi_direct", None, str(Path(gurobipy.__file__).resolve())
+        # Gurobi 12 removed the keyword-based addConstr signature used by old
+        # Pyomo releases. Pyomo 6.8.1 replaced that deprecated call. Existing
+        # environments with Pyomo 6.5 can still solve safely through gurobi_cl.
+        if gurobi_version >= (12, 0, 0) and pyomo_version < (6, 8, 1):
+            incompatible_direct_reason = (
+                f"Pyomo {pyomo.__version__} is incompatible with the "
+                f"gurobi_direct interface of Gurobi {'.'.join(map(str, gurobi_version))}. "
+                "Using the gurobi_cl file interface instead. Upgrade to "
+                "Pyomo 6.8.2 to restore the direct interface."
+            )
+            logging.warning(incompatible_direct_reason)
+        else:
+            direct_solver = SolverFactory("gurobi_direct")
+            if direct_solver.available(exception_flag=False):
+                return "gurobi_direct", None, str(
+                    Path(gurobipy.__file__).resolve()
+                )
+
     except Exception:
         pass
 
-    launcher = _ensure_gurobi_available()
+    try:
+        launcher = _ensure_gurobi_available()
+    except RuntimeError as exc:
+        if incompatible_direct_reason:
+            raise RuntimeError(
+                f"{incompatible_direct_reason} However, gurobi_cl could not be "
+                "found. Upgrade the active environment with `python -m pip "
+                "install Pyomo==6.8.2`, or install the full Gurobi Conda "
+                "package so gurobi_cl is available."
+            ) from exc
+        raise
     return "gurobi", "mps", launcher
 
 

@@ -127,8 +127,11 @@ users should use their administrator's configuration instead.
 Test the package and licence:
 
 ```bash
+python -c "import pyomo, gurobipy as gp; print('Pyomo:', pyomo.__version__); print('Gurobi:', gp.gurobi.version())"
 python -c "import gurobipy as gp; env=gp.Env(); print('Gurobi licence is working'); env.dispose()"
 ```
+
+The tested combination reports Pyomo 6.8.2 and Gurobi 12.0.1.
 
 When `gurobi_cl` is installed, also check:
 
@@ -317,6 +320,15 @@ same Terminal.
 If Gurobi reports `Model too large for size-limited license`, the software is
 installed but the active licence is insufficient for the project. Activate the
 intended academic or commercial licence.
+
+If a simulation reports `addConstr() got an unexpected keyword argument
+'sense'`, Gurobi 12 is being used with an old Pyomo release. Update the active
+environment and restart the application:
+
+```bash
+conda activate oemof-system
+python -m pip install Pyomo==6.8.2
+```
 
 ### The browser does not open
 

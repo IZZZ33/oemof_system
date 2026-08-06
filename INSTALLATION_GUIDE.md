@@ -236,6 +236,7 @@ apply the configuration supplied by their administrator.
 Test that Python can find Gurobi and its licence:
 
 ```bat
+python -c "import pyomo, gurobipy as gp; print('Pyomo:', pyomo.__version__); print('Gurobi:', gp.gurobi.version())"
 python -c "import gurobipy as gp; env=gp.Env(); print('Gurobi licence is working'); env.dispose()"
 ```
 
@@ -245,8 +246,8 @@ If `gurobi_cl` is installed, its independent licence check is:
 gurobi_cl --license
 ```
 
-You should see `Gurobi licence is working`. Informational Gurobi text may appear
-before it; that is normal.
+You should see Pyomo 6.8.2, Gurobi 12.0.1, and `Gurobi licence is working`.
+Informational Gurobi text may appear before it; that is normal.
 
 To check which Gurobi installation and licence are visible in the activated
 environment, enter:
@@ -504,6 +505,17 @@ administrator.
 If Gurobi reports `Model too large for size-limited license`, it is installed
 but the active licence is insufficient for the project. Activate the intended
 academic or commercial licence.
+
+If a simulation reports `addConstr() got an unexpected keyword argument
+'sense'`, Gurobi 12 is being used with an old Pyomo release. Update the active
+environment from the repository:
+
+```bat
+conda activate oemof-system
+python -m pip install Pyomo==6.8.2
+```
+
+Then stop and restart the application.
 
 If `gurobi_cl` or the licence is installed in a nonstandard location, use the
 `where` and `set` commands in Part 6. Set the variables and start

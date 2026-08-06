@@ -37,7 +37,9 @@ dependencies:
       - oemof.network==0.5.0a1
       - oemof.solph==0.5.0
       - oemof.tools==0.4.2
-      - Pyomo==6.5.0
+      # oemof.solph 0.5 requires Pyomo >=6,<7. Version 6.8.1+ is also
+      # required for gurobi_direct compatibility with Gurobi 12.
+      - Pyomo==6.8.2
       - networkx==3.0
 
       # Results and charts

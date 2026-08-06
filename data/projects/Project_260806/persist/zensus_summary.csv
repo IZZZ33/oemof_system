@@ -1,0 +1,5 @@
+topic,zensus_class,label,count,share,grid_cells,source
+building age,a1949bis1978,1949-1978,12.0,1.0,4,"Zensus 2022 (Destatis, 100 m grid)"
+building type,EFH_Reihenhaus,row single-family,3.0,0.15,4,"Zensus 2022 (Destatis, 100 m grid)"
+building type,MFH_7bis12Wohnungen,multi-family 7-12 dwellings,6.0,0.3,4,"Zensus 2022 (Destatis, 100 m grid)"
+building type,AndererGebaeudetyp,other residential building,11.0,0.55,4,"Zensus 2022 (Destatis, 100 m grid)"
