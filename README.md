@@ -57,7 +57,7 @@ python -m pip install -r requirements.txt
 
 ### Install Gurobi and start the tool
 
-1. Install Gurobi and activate a valid Gurobi licence. Gurobi is not installed by `environment.yml` because its installation and licence are managed separately. The environment and installation folders may have any names. The application first uses the Python-native `gurobi_direct` interface when `gurobipy` is installed. Otherwise, it detects the external `gurobi_cl` launcher through `PATH`, `GUROBI_HOME`, standard installation folders, and the active Conda environment. For an unusual installation, set `OEMOF_GUROBI_PATH` to the Gurobi `bin` directory or directly to `gurobi_cl`.
+1. With the environment active, install the tested Gurobi Conda package using `conda install -c gurobi gurobi=12.0.1`. Alternatively, users with a full system installation can install only its Python interface using `python -m pip install gurobipy==12.0.1`. Do not use both methods in the same environment. Activate a valid Gurobi licence according to its licence type. Gurobi is not installed by `environment.yml` because its installation and licence are managed separately. The application first uses the Python-native `gurobi_direct` interface when `gurobipy` is installed. Otherwise, it detects `gurobi_cl` through `PATH`, `GUROBI_HOME`, standard installation folders, and the active Conda environment. For an unusual installation, set `OEMOF_GUROBI_PATH` to the Gurobi `bin` directory or directly to `gurobi_cl`.
 2. Start the tool from the repository:
 
    ```text

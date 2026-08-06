@@ -39,9 +39,15 @@ instructions for `conda init`, then restart Terminal.
 
 ## 2 — Install and license Gurobi
 
-Download Gurobi for the same operating system and processor architecture as the
-Conda installation. Activate an academic or commercial licence according to
-the instructions in your Gurobi account.
+Create or sign in to a Gurobi account and obtain the appropriate academic or
+commercial licence. You may install the full Gurobi package for the same
+operating system and processor architecture now, or use the recommended Conda
+package in Section 4.
+
+Gurobi has three parts: the optimizer/`gurobi_cl` command, the `gurobipy`
+Python interface, and a valid licence. The application needs the Python
+interface or command-line optimizer, plus a suitable licence. Section 4 gives
+two installation methods; use only one method inside the environment.
 
 For a named-user licence, Gurobi normally supplies a private command similar to:
 
@@ -50,6 +56,8 @@ grbgetkey YOUR-LICENCE-KEY
 ```
 
 Run the exact command supplied by Gurobi. Do not share the key or licence file.
+WLS and licence-server users should follow the different configuration supplied
+by their licence administrator.
 
 ## 3 — Download and extract the application
 
@@ -92,16 +100,40 @@ python -m pip check
 
 Python should report version 3.10.
 
-Install the tested Gurobi Python package into this environment:
+Choose one Gurobi installation method while the environment is active.
+
+### Method A — Gurobi Conda package (recommended)
+
+This installs `gurobipy`, `gurobi_cl`, and the licence tools together:
+
+```bash
+conda install -c gurobi gurobi=12.0.1
+```
+
+### Method B — Existing full Gurobi installation plus Python interface
+
+If the full optimizer is already installed system-wide, install its tested
+Python interface in the active environment:
 
 ```bash
 python -m pip install gurobipy==12.0.1
 ```
 
+Version 12.0.1 is the version tested with this project. Do not run the pip
+command after Method A. If the licence has not yet been retrieved, run the
+private `grbgetkey` command from your Gurobi account now. WLS and licence-server
+users should use their administrator's configuration instead.
+
 Test the package and licence:
 
 ```bash
 python -c "import gurobipy as gp; env=gp.Env(); print('Gurobi licence is working'); env.dispose()"
+```
+
+When `gurobi_cl` is installed, also check:
+
+```bash
+gurobi_cl --license
 ```
 
 Check what the active environment can find:
@@ -204,6 +236,19 @@ runner. Keep Terminal open while using the application. Stop it with `Ctrl+C`.
 The existing `streamlit.sh` script is UI-only and does not start the background
 optimization runner.
 
+## Starting the program on later days
+
+The environment and Gurobi do not need to be installed again. Open Terminal and
+run:
+
+```bash
+cd ~/path/to/oemof_system
+conda activate oemof-system
+python oemof-hri.py
+```
+
+Replace the example repository path with its actual location.
+
 ## Headless Linux servers
 
 The calculation and file-generation code can run without a graphical desktop.
@@ -254,6 +299,25 @@ follow Gurobi's instructions for the `GRB_LICENSE_FILE` environment variable.
 The discovery and `export` commands in Section 4 show how to select a licence
 stored inside the active Conda environment.
 
+### Gurobi cannot be found
+
+Activate the environment and check both interfaces:
+
+```bash
+conda activate oemof-system
+command -v gurobi_cl
+python -c "import gurobipy; print(gurobipy.__file__)"
+```
+
+If neither command succeeds, install Gurobi using one method from Section 4. If
+`gurobi_cl` works but the application does not find it, set
+`OEMOF_GUROBI_PATH` as shown in Section 4 and restart the application from that
+same Terminal.
+
+If Gurobi reports `Model too large for size-limited license`, the software is
+installed but the active licence is insufficient for the project. Activate the
+intended academic or commercial licence.
+
 ### The browser does not open
 
 For a desktop installation, manually open the local URL printed in Terminal,
@@ -269,9 +333,31 @@ http://localhost:8501
 cd ~/path/to/oemof_system
 conda activate oemof-system
 conda env update --name oemof-system --file environment.yml --prune
-python -m pip install gurobipy==12.0.1
 python -m pip check
 ```
+
+Then refresh Gurobi using the same method originally selected in Section 4:
+
+```bash
+# Conda method
+conda install -c gurobi gurobi=12.0.1
+
+# OR: full system installation plus Python interface
+python -m pip install gurobipy==12.0.1
+```
+
+Run only the command for the chosen method.
+
+## Quick installation checklist
+
+- [ ] A 64-bit Conda distribution matching the computer architecture is installed.
+- [ ] The repository ZIP is extracted, or the repository is cloned with Git.
+- [ ] Terminal is open in the folder containing `environment.yml`.
+- [ ] `conda env create --file environment.yml` completed.
+- [ ] `conda activate oemof-system` completed.
+- [ ] Gurobi was installed using one method from Section 4.
+- [ ] A suitable Gurobi licence is active and the Python licence test passed.
+- [ ] The application was started with `python oemof-hri.py`.
 
 ## Official references
 

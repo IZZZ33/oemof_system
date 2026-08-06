@@ -48,6 +48,17 @@ The optimization calculations require Gurobi. The small size-limited licence
 included with some Gurobi installations is generally not sufficient for real
 projects.
 
+Gurobi setup can involve three separate parts:
+
+1. the **optimizer and command-line tools**, including `gurobi_cl`;
+2. the **Python interface**, named `gurobipy`; and
+3. a **valid licence**.
+
+The application needs `gurobipy` or `gurobi_cl`, together with a valid licence.
+The recommended Conda package provides both interfaces. Part 6 provides two
+supported installation methods. Do not install Gurobi with both Conda and pip
+in the same environment unless an administrator specifically requires it.
+
 ### 2.1 Create a Gurobi account and choose a licence
 
 1. Create an account on the [Gurobi website](https://www.gurobi.com/).
@@ -65,11 +76,13 @@ VPN when the licence request requires it.
 
 ### 2.2 Install Gurobi Optimizer
 
-1. Download the 64-bit Windows installer from the Gurobi download page available
-   through your account.
-2. Run the installer and accept the normal Windows installation options.
-3. Restart **Anaconda Prompt** after installation so it can see the newly
-   installed Gurobi commands.
+You may either install the full 64-bit Windows package from the Gurobi download
+page now, or use the Gurobi Conda package in Part 6. The Conda method is usually
+simpler because it installs `gurobipy` and `gurobi_cl` together inside the
+project environment.
+
+If you use the full Windows installer, restart **Anaconda Prompt** afterward so
+it can see the newly installed Gurobi commands.
 
 ### 2.3 Activate the licence
 
@@ -85,8 +98,10 @@ grbgetkey YOUR-LICENCE-KEY
 4. Do not share your licence key or `gurobi.lic` file with other people.
 
 If `grbgetkey` is not recognized, use the Gurobi Command Prompt installed with
-Gurobi, or follow Gurobi's licence-tool instructions. Gurobi's official academic
-page contains the current named-user activation procedure.
+Gurobi, install the Conda package in Part 6 and try again, or follow Gurobi's
+licence-tool instructions. Gurobi's official academic page contains the current
+named-user activation procedure. WLS and licence-server users must follow the
+different instructions supplied by their licence administrator.
 
 ## Part 3 — Download the program
 
@@ -189,9 +204,22 @@ requirements are broken.
 ## Part 6 — Install Gurobi in the project environment
 
 Gurobi is deliberately not included in `environment.yml`, because its software
-version and licence must be managed separately. Even if the full Gurobi program
-is installed on Windows, install its Python package into the activated project
+version and licence must be managed separately. Keep the `oemof-system`
+environment activated and choose **one** of the following methods.
+
+### Method A — Gurobi Conda package (recommended)
+
+This installs the optimizer, `gurobi_cl`, and `gurobipy` in the active
 environment:
+
+```bat
+conda install -c gurobi gurobi=12.0.1
+```
+
+### Method B — Existing full Gurobi installation plus Python interface
+
+Use this when the full Gurobi Optimizer is already installed system-wide. Add
+the tested Python interface to the active environment:
 
 ```bat
 python -m pip install gurobipy==12.0.1
@@ -199,12 +227,22 @@ python -m pip install gurobipy==12.0.1
 
 Version 12.0.1 is the version tested with this project. If your organization
 requires another Gurobi version, ask the project administrator before changing
-it.
+it. Do not run the pip command after Method A.
+
+If the licence has not yet been activated, run the private `grbgetkey` command
+shown in your Gurobi account now. WLS and licence-server users should instead
+apply the configuration supplied by their administrator.
 
 Test that Python can find Gurobi and its licence:
 
 ```bat
 python -c "import gurobipy as gp; env=gp.Env(); print('Gurobi licence is working'); env.dispose()"
+```
+
+If `gurobi_cl` is installed, its independent licence check is:
+
+```bat
+gurobi_cl --license
 ```
 
 You should see `Gurobi licence is working`. Informational Gurobi text may appear
@@ -367,6 +405,9 @@ conda activate oemof-system
 python oemof-hri.py
 ```
 
+You do not need to recreate the environment, reinstall Gurobi, or retrieve the
+licence again unless the installation or licence has changed.
+
 ## Updating the program
 
 If you downloaded a new ZIP version, keep a backup of important project and
@@ -378,8 +419,20 @@ program folder:
 ```bat
 conda activate oemof-system
 conda env update --name oemof-system --file environment.yml --prune
-python -m pip install gurobipy==12.0.1
 python -m pip check
+```
+
+Because `environment.yml` does not manage Gurobi, refresh it afterward using the
+same method originally chosen in Part 6—either:
+
+```bat
+conda install -c gurobi gurobi=12.0.1
+```
+
+or, for an existing full system installation:
+
+```bat
+python -m pip install gurobipy==12.0.1
 ```
 
 Do not run `conda env create` again when the environment already exists. Use
@@ -434,16 +487,23 @@ First test:
 python -c "import gurobipy; print(gurobipy.__file__)"
 ```
 
-If this fails, reactivate the environment and reinstall the tested package:
+If this fails, reactivate the environment and reinstall Gurobi using the same
+method chosen in Part 6. For the recommended Conda method:
 
 ```bat
 conda activate oemof-system
-python -m pip install gurobipy==12.0.1
+conda install -c gurobi gurobi=12.0.1
 ```
+
+For Method B, use `python -m pip install gurobipy==12.0.1` instead.
 
 If importing works but the licence test fails, reactivate the licence with the
 private `grbgetkey` command from your Gurobi account or contact your licence
 administrator.
+
+If Gurobi reports `Model too large for size-limited license`, it is installed
+but the active licence is insufficient for the project. Activate the intended
+academic or commercial licence.
 
 If `gurobi_cl` or the licence is installed in a nonstandard location, use the
 `where` and `set` commands in Part 6. Set the variables and start
@@ -474,7 +534,7 @@ Another copy may already be running. Find its Anaconda Prompt and stop it with
 ## Quick installation checklist
 
 - [ ] Anaconda installed and `conda --version` works.
-- [ ] Gurobi Optimizer installed.
+- [ ] Gurobi installed using one method from Part 6.
 - [ ] A valid academic or commercial Gurobi licence activated.
 - [ ] Project ZIP downloaded and extracted.
 - [ ] Anaconda Prompt opened in the project folder.
