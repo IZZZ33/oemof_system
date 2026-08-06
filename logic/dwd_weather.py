@@ -1,8 +1,8 @@
-"""Coordinate-based DWD weather data and heat-pump COP helpers.
+"""Coordinate-based DWD weather data, PV profiles, and heat-pump COP helpers.
 
-The downloader uses the open Climate Data Center (CDC) hourly air-temperature
-station observations. Downloads are cached because the historical station
-archives can contain several decades of data.
+The downloader uses open Climate Data Center (CDC) hourly air-temperature,
+soil-temperature, and solar-radiation station observations. Downloads are
+cached because the station archives can contain several decades of data.
 """
 
 from __future__ import annotations
@@ -11,6 +11,7 @@ import io
 import math
 import re
 import time
+import urllib.error
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -27,9 +28,16 @@ DWD_SOIL_BASE = (
     "https://opendata.dwd.de/climate_environment/CDC/observations_germany/"
     "climate/hourly/soil_temperature/historical"
 )
+DWD_SOLAR_BASE = (
+    "https://opendata.dwd.de/climate_environment/CDC/observations_germany/"
+    "climate/hourly/solar"
+)
 CACHE_DIR = Path(__file__).resolve().parents[1] / "cache" / "dwd"
 STATION_FILE = "TU_Stundenwerte_Beschreibung_Stationen.txt"
+SOIL_STATION_FILE = "EB_Stundenwerte_Beschreibung_Stationen.txt"
+SOLAR_STATION_FILE = "ST_Stundenwerte_Beschreibung_Stationen.txt"
 DIN_REFERENCE_YEARS = 20
+J_CM2_TO_KWH_M2 = 1.0 / 360.0
 
 
 def _download(url: str, target: Path, max_age_days: int | None = None) -> bytes:
@@ -40,18 +48,27 @@ def _download(url: str, target: Path, max_age_days: int | None = None) -> bytes:
     ):
         return target.read_bytes()
     request = urllib.request.Request(url, headers={"User-Agent": "oemof-system/1.0"})
-    with urllib.request.urlopen(request, timeout=45) as response:
-        payload = response.read()
+    last_error = None
+    for attempt in range(2):
+        try:
+            with urllib.request.urlopen(request, timeout=45) as response:
+                payload = response.read()
+            break
+        except (urllib.error.URLError, TimeoutError, OSError) as exc:
+            last_error = exc
+            if attempt == 0:
+                time.sleep(1.0)
+    else:
+        detail = str(last_error).strip() or type(last_error).__name__
+        raise RuntimeError(
+            f"DWD download failed twice for {Path(url).name}: {detail}"
+        ) from last_error
     target.write_bytes(payload)
     return payload
 
 
-def _station_metadata() -> pd.DataFrame:
-    payload = _download(
-        f"{DWD_HOURLY_BASE}/{STATION_FILE}",
-        CACHE_DIR / STATION_FILE,
-        max_age_days=30,
-    )
+def _parse_station_metadata(payload: bytes) -> pd.DataFrame:
+    """Parse the fixed-width-like station list shared by DWD hourly products."""
     text = payload.decode("cp1252", errors="replace")
     rows = []
     pattern = re.compile(
@@ -78,6 +95,33 @@ def _station_metadata() -> pd.DataFrame:
     if not rows:
         raise ValueError("DWD station metadata could not be parsed.")
     return pd.DataFrame(rows)
+
+
+def _station_metadata() -> pd.DataFrame:
+    payload = _download(
+        f"{DWD_HOURLY_BASE}/{STATION_FILE}",
+        CACHE_DIR / STATION_FILE,
+        max_age_days=30,
+    )
+    return _parse_station_metadata(payload)
+
+
+def _solar_station_metadata() -> pd.DataFrame:
+    payload = _download(
+        f"{DWD_SOLAR_BASE}/{SOLAR_STATION_FILE}",
+        CACHE_DIR / SOLAR_STATION_FILE,
+        max_age_days=30,
+    )
+    return _parse_station_metadata(payload)
+
+
+def _soil_station_metadata() -> pd.DataFrame:
+    payload = _download(
+        f"{DWD_SOIL_BASE}/{SOIL_STATION_FILE}",
+        CACHE_DIR / SOIL_STATION_FILE,
+        max_age_days=30,
+    )
+    return _parse_station_metadata(payload)
 
 
 def _distance_km(lat1, lon1, lat2, lon2):
@@ -107,6 +151,70 @@ def _nearest_station(latitude: float, longitude: float) -> dict:
         latitude, longitude, eligible["latitude"], eligible["longitude"]
     )
     return eligible.sort_values("distance_km").iloc[0].to_dict()
+
+
+def _nearest_solar_station(latitude: float, longitude: float) -> dict:
+    stations = _solar_station_metadata().dropna(
+        subset=["latitude", "longitude", "start", "end"]
+    ).copy()
+    latest_complete_year = pd.Timestamp.utcnow().year - 1
+    eligible = stations.loc[
+        (stations["start"].dt.year <= latest_complete_year - 4)
+        & (stations["end"].dt.year >= latest_complete_year)
+    ].copy()
+    if eligible.empty:
+        eligible = stations.loc[stations["end"].dt.year >= latest_complete_year].copy()
+    if eligible.empty:
+        eligible = stations.copy()
+    eligible["distance_km"] = _distance_km(
+        latitude, longitude, eligible["latitude"], eligible["longitude"]
+    )
+    return eligible.sort_values("distance_km").iloc[0].to_dict()
+
+
+def _nearest_soil_station(latitude: float, longitude: float) -> dict:
+    """Return the nearest soil station with a useful long-term record."""
+    stations = _soil_station_metadata().dropna(
+        subset=["latitude", "longitude", "start", "end"]
+    ).copy()
+    latest_complete_year = pd.Timestamp.utcnow().year - 1
+    eligible = stations.loc[
+        (stations["start"].dt.year <= latest_complete_year - DIN_REFERENCE_YEARS + 1)
+        & (stations["end"].dt.year >= latest_complete_year)
+    ].copy()
+    if eligible.empty:
+        eligible = stations.loc[
+            stations["end"].dt.year >= latest_complete_year
+        ].copy()
+    if eligible.empty:
+        eligible = stations.copy()
+    eligible["distance_km"] = _distance_km(
+        latitude, longitude, eligible["latitude"], eligible["longitude"]
+    )
+    return eligible.sort_values("distance_km").iloc[0].to_dict()
+
+
+def solar_station_info(station_id, latitude: float, longitude: float) -> dict | None:
+    """Return coordinates and project distance for a known DWD solar station."""
+    if station_id is None:
+        return None
+    wanted = str(station_id).strip()
+    if wanted.endswith(".0"):
+        wanted = wanted[:-2]
+    wanted = wanted.zfill(5)
+    stations = _solar_station_metadata().dropna(
+        subset=["latitude", "longitude"]
+    ).copy()
+    station_ids = stations["station_id"].astype(str).str.strip().str.replace(
+        r"\.0$", "", regex=True
+    ).str.zfill(5)
+    matched = stations.loc[station_ids.eq(wanted)].copy()
+    if matched.empty:
+        return None
+    matched["distance_km"] = _distance_km(
+        latitude, longitude, matched["latitude"], matched["longitude"]
+    )
+    return matched.sort_values("distance_km").iloc[0].to_dict()
 
 
 def _historical_directory() -> str:
@@ -154,7 +262,48 @@ def _station_hourly_data(station_id: str) -> pd.DataFrame:
     return out.loc[~out.index.duplicated(keep="last")]
 
 
-def _complete_hourly_year(data: pd.DataFrame, requested_year: int):
+def _station_solar_data(station_id: str) -> pd.DataFrame:
+    archive_name = f"stundenwerte_ST_{station_id}_row.zip"
+    payload = _download(
+        f"{DWD_SOLAR_BASE}/{archive_name}",
+        CACHE_DIR / archive_name,
+        max_age_days=30,
+    )
+    with zipfile.ZipFile(io.BytesIO(payload)) as archive:
+        product_names = [
+            name
+            for name in archive.namelist()
+            if Path(name).name.lower().startswith("produkt_st_stunde")
+        ]
+        if not product_names:
+            raise ValueError(f"DWD archive {archive_name} has no hourly solar product.")
+        with archive.open(product_names[0]) as source:
+            data = pd.read_csv(source, sep=";", dtype=str)
+    data.columns = [str(column).strip() for column in data.columns]
+    if "MESS_DATUM" not in data or "FG_LBERG" not in data:
+        raise ValueError("DWD solar product is missing MESS_DATUM or FG_LBERG.")
+    timestamp_text = data["MESS_DATUM"].str.strip()
+    timestamp = pd.to_datetime(timestamp_text, format="%Y%m%d%H:%M", errors="coerce")
+    if timestamp.notna().sum() == 0:
+        timestamp = pd.to_datetime(timestamp_text, format="%Y%m%d%H", errors="coerce")
+    # Solar observations are reported a few minutes after the nominal hour
+    # (for example 01:10 or 01:11); align them to the hourly scenario grid.
+    timestamp = timestamp.dt.floor("h")
+    radiation = (
+        pd.to_numeric(data["FG_LBERG"].str.strip(), errors="coerce")
+        .replace(-999, np.nan)
+        .clip(lower=0)
+    )
+    out = pd.DataFrame(
+        {"global_radiation_j_cm2": radiation.to_numpy()}, index=timestamp
+    )
+    out = out.loc[out.index.notna()].sort_index()
+    return out.loc[~out.index.duplicated(keep="last")]
+
+
+def _complete_hourly_year_column(
+    data: pd.DataFrame, requested_year: int, column: str
+):
     """Return one 8760-hour year, or None when data completeness is below 95%."""
     year = int(requested_year)
     start = pd.Timestamp(year, 1, 1)
@@ -163,27 +312,27 @@ def _complete_hourly_year(data: pd.DataFrame, requested_year: int):
     # Scenario templates always contain 8760 hours. Remove 29 February for
     # leap years so timestamps and optimization input remain aligned.
     expected = expected[~((expected.month == 2) & (expected.day == 29))]
-    values = data.reindex(expected)["temperature_c"]
+    values = data.reindex(expected)[column]
     if values.notna().mean() < 0.95:
         return None
     values = values.interpolate(limit=12, limit_direction="both").ffill().bfill()
-    return pd.Series(values.to_numpy(float), index=expected, name="temperature_c")
+    return pd.Series(values.to_numpy(float), index=expected, name=column)
 
 
-def _multi_year_temperature_profile(
-    data: pd.DataFrame, requested_year: int | None = None, max_years: int = 5
+def _complete_hourly_year(data: pd.DataFrame, requested_year: int):
+    return _complete_hourly_year_column(data, requested_year, "temperature_c")
+
+
+def _multi_year_rank_profile(
+    data: pd.DataFrame,
+    column: str,
+    requested_year: int | None = None,
+    max_years: int = 5,
 ):
-    """Average annual order statistics and restore a reference-year chronology.
-
-    Averaging temperatures at the same calendar hour would smooth cold and hot
-    events that occur on different dates. Instead, each complete year is sorted,
-    equal ranks are averaged, and those averaged ranks are assigned to the
-    timestamps holding the corresponding ranks in the latest/reference year.
-    """
     complete = {}
     candidates = sorted(set(data.index.year), reverse=True)
     for year in candidates:
-        profile = _complete_hourly_year(data, int(year))
+        profile = _complete_hourly_year_column(data, int(year), column)
         if profile is not None:
             complete[int(year)] = profile
 
@@ -203,16 +352,52 @@ def _multi_year_temperature_profile(
         [np.sort(complete[year].to_numpy(float), kind="mergesort") for year in used_years]
     )
     mean_sorted = np.mean(sorted_matrix, axis=0)
-    reference_values = reference.to_numpy(float)
-    reference_order = np.argsort(reference_values, kind="mergesort")
+    reference_order = np.argsort(reference.to_numpy(float), kind="mergesort")
     composite = np.empty_like(mean_sorted)
     composite[reference_order] = mean_sorted
     return (
         reference_year,
-        pd.Series(composite, index=reference.index, name="temperature_c"),
+        pd.Series(composite, index=reference.index, name=column),
         sorted(complete),
         sorted(used_years),
     )
+
+
+def _multi_year_temperature_profile(
+    data: pd.DataFrame, requested_year: int | None = None, max_years: int = 5
+):
+    """Average annual order statistics and restore a reference-year chronology.
+
+    Averaging temperatures at the same calendar hour would smooth cold and hot
+    events that occur on different dates. Instead, each complete year is sorted,
+    equal ranks are averaged, and those averaged ranks are assigned to the
+    timestamps holding the corresponding ranks in the latest/reference year.
+    """
+    return _multi_year_rank_profile(
+        data,
+        "temperature_c",
+        requested_year=requested_year,
+        max_years=max_years,
+    )
+
+
+def _multi_year_pv_profile(
+    data: pd.DataFrame, requested_year: int | None = None, max_years: int = 5
+):
+    reference_year, profile, available, used = _multi_year_rank_profile(
+        data,
+        "global_radiation_j_cm2",
+        requested_year=requested_year,
+        max_years=max_years,
+    )
+    # FG_LBERG is reported in J/cm2. Convert every hourly value to kWh/m2;
+    # the PV transformer applies the separate 20% electrical efficiency.
+    profile = profile.clip(lower=0) * J_CM2_TO_KWH_M2
+    annual_sum = float(profile.sum())
+    if not math.isfinite(annual_sum) or annual_sum <= 0:
+        raise ValueError("The selected DWD solar station has no positive annual radiation.")
+    profile.name = "PV.fix"
+    return reference_year, profile, available, used
 
 
 def _legacy_complete_hourly_year(data: pd.DataFrame, requested_year: int | None = None):
@@ -281,10 +466,9 @@ def _soil_temperature_mean(station_id: str, start_year: int, end_year: int):
         format="%Y%m%d%H",
         errors="coerce",
     )
-    depth_column = next(
-        (column for column in ("V_TE100", "V_TE050", "V_TE020", "V_TE010") if column in data.columns),
-        None,
-    )
+    # Network-loss calculations explicitly use the annual mean at 1 m depth.
+    # Do not silently substitute a shallower soil sensor here.
+    depth_column = "V_TE100" if "V_TE100" in data.columns else None
     if depth_column is None:
         return None
     values = pd.to_numeric(data[depth_column].str.strip(), errors="coerce").replace(-999, np.nan)
@@ -308,18 +492,37 @@ def get_location_weather(latitude: float, longitude: float, year: int | None = N
     )
     design_c, ground_c, reference_start, reference_end = _design_parameters(hourly_all)
     ground_method = "20-year mean air temperature used as ground-boundary proxy"
+    ground_temperature_depth_cm = None
+    soil_station = None
     try:
+        soil_station = _nearest_soil_station(latitude, longitude)
         observed_ground = _soil_temperature_mean(
-            station["station_id"], reference_start, reference_end
+            soil_station["station_id"], reference_start, reference_end
         )
         if observed_ground is not None and math.isfinite(observed_ground[0]):
             ground_c, ground_depth_cm = observed_ground
+            ground_temperature_depth_cm = ground_depth_cm
             ground_method = (
                 f"DWD mean observed soil temperature at {ground_depth_cm} cm "
+                f"from {soil_station['station_name']} "
                 "(latest 20-year period)"
             )
     except Exception:
         pass
+    solar_station = None
+    pv_profile = None
+    solar_year = None
+    solar_available_years = []
+    solar_used_years = []
+    solar_error = None
+    try:
+        solar_station = _nearest_solar_station(latitude, longitude)
+        solar_all = _station_solar_data(solar_station["station_id"])
+        solar_year, pv_profile, solar_available_years, solar_used_years = (
+            _multi_year_pv_profile(solar_all, requested_year=year, max_years=5)
+        )
+    except Exception as exc:
+        solar_error = str(exc)
     return {
         "temperature_c": hourly,
         "year": weather_year,
@@ -333,6 +536,12 @@ def get_location_weather(latitude: float, longitude: float, year: int | None = N
         ),
         "design_outdoor_temperature_c": design_c,
         "ground_temperature_c": ground_c,
+        "ground_temperature_depth_cm": ground_temperature_depth_cm,
+        "soil_station_id": soil_station.get("station_id") if soil_station else None,
+        "soil_station_name": soil_station.get("station_name") if soil_station else None,
+        "soil_station_distance_km": (
+            float(soil_station["distance_km"]) if soil_station else None
+        ),
         "design_reference_start": reference_start,
         "design_reference_end": reference_end,
         "station_id": station["station_id"],
@@ -340,7 +549,26 @@ def get_location_weather(latitude: float, longitude: float, year: int | None = N
         "station_latitude": float(station["latitude"]),
         "station_longitude": float(station["longitude"]),
         "station_distance_km": float(station["distance_km"]),
+        "pv_profile": pv_profile,
+        "pv_profile_unit": "kWh/m2 global irradiation",
+        "solar_year": solar_year,
+        "solar_available_complete_years": solar_available_years,
+        "solar_profile_years_used": solar_used_years,
+        "solar_profile_year_count": len(solar_used_years),
+        "solar_profile_method": (
+            "mean of sorted annual global-radiation profiles mapped to the rank "
+            f"chronology of reference year {solar_year}; FG_LBERG converted "
+            "from J/cm2 to kWh/m2 without fixed annual normalization"
+            if pv_profile is not None else None
+        ),
+        "solar_station_id": solar_station.get("station_id") if solar_station else None,
+        "solar_station_name": solar_station.get("station_name") if solar_station else None,
+        "solar_station_latitude": float(solar_station["latitude"]) if solar_station else None,
+        "solar_station_longitude": float(solar_station["longitude"]) if solar_station else None,
+        "solar_station_distance_km": float(solar_station["distance_km"]) if solar_station else None,
+        "solar_error": solar_error,
         "source": "DWD Climate Data Center hourly air-temperature observations",
+        "solar_source": "DWD Climate Data Center hourly solar observations (FG_LBERG)",
         "design_method": "10th independent two-day cold-event mean in the latest available 20-year station period",
         "ground_method": ground_method,
     }

@@ -1,0 +1,6 @@
+input_index,heat_demand_kWh,peak_load_kW,estimation_method
+0,893311.9178553415,450.3494902940465,TEASER heat-loss factors x DWD hourly temperature minus coarse useful TEASER internal/solar gains (38.3%)
+1,1550793.5752549008,854.4705306178691,TEASER heat-loss factors x DWD hourly temperature minus coarse useful TEASER internal/solar gains (40.0%)
+2,749436.353509034,377.744373782855,TEASER heat-loss factors x DWD hourly temperature minus coarse useful TEASER internal/solar gains (38.2%)
+3,4405464.055899984,2410.0137247448206,TEASER heat-loss factors x DWD hourly temperature minus coarse useful TEASER internal/solar gains (40.0%)
+6,323826.4396220805,168.73487946381846,TEASER heat-loss factors x DWD hourly temperature minus coarse useful TEASER internal/solar gains (40.0%)

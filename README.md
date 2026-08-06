@@ -13,23 +13,74 @@ You do not need heating-planning or programming knowledge to use the pages in th
 
 The tool works best for locations in Germany and needs an internet connection to load maps, building information, and weather data.
 
-A technical administrator must install the required software once:
+For a complete beginner-friendly Windows setup—including Anaconda, Gurobi,
+licence activation, downloading the code, creating the Conda environment, and
+starting the application—see [INSTALLATION_GUIDE.md](INSTALLATION_GUIDE.md).
 
-1. Install Python 3.10.
-2. Install the packages listed in `requirements.txt`:
+A technical administrator must install the required software once. Using Conda
+with `environment.yml` is recommended because it installs the tested Python
+version and all required Python packages together.
 
-   ```text
-   python -m pip install -r requirements.txt
-   ```
+### Create the Conda environment
 
-3. Install Gurobi 12 and activate a valid Gurobi licence. The current simulation code uses the Gurobi solver.
-4. Start the tool from this folder:
+Open Anaconda Prompt or a terminal in the downloaded repository and run:
+
+```text
+conda env create --file environment.yml
+conda activate oemof-system
+python -m pip check
+```
+
+The default environment name is `oemof-system`. To use a different name:
+
+```text
+conda env create --name YOUR_ENVIRONMENT_NAME --file environment.yml
+conda activate YOUR_ENVIRONMENT_NAME
+```
+
+To synchronize an existing environment after `environment.yml` changes:
+
+```text
+conda env update --name YOUR_ENVIRONMENT_NAME --file environment.yml --prune
+conda activate YOUR_ENVIRONMENT_NAME
+python -m pip check
+```
+
+As an alternative to Conda, install Python 3.10, create and activate a virtual
+environment, and install the pinned packages with:
+
+```text
+python -m pip install -r requirements.txt
+```
+
+### Install Gurobi and start the tool
+
+1. Install Gurobi and activate a valid Gurobi licence. Gurobi is not installed by `environment.yml` because its installation and licence are managed separately. The environment and installation folders may have any names. The application first uses the Python-native `gurobi_direct` interface when `gurobipy` is installed. Otherwise, it detects the external Gurobi launcher through `PATH`, `GUROBI_HOME`, standard Windows installation folders, and Conda roots. For an unusual installation, set `OEMOF_GUROBI_PATH` to the Gurobi `bin` directory or directly to its `gurobi`/`gurobi.bat` launcher.
+2. Start the tool from the repository:
 
    ```text
    python oemof-hri.py
    ```
 
 Your web browser should open the tool automatically. Keep the command window and browser page open while a calculation is running.
+
+The environment may have any name. Activate it before starting the tool; the
+application and its Streamlit subprocess both reuse that environment's Python:
+
+```text
+conda activate YOUR_ENVIRONMENT_NAME
+python -c "import sys; print(sys.executable)"
+python oemof-hri.py
+```
+
+The repository itself may also be stored under any folder name or location.
+Application data, templates, and results are resolved relative to the downloaded
+repository rather than the terminal's current working directory.
+
+When using PyCharm, select that environment as the project interpreter and set
+the run configuration to use the project interpreter. Do not enter an absolute
+Python path in a shared run configuration. Files under `.idea/` are intentionally
+not shared because interpreter registrations are specific to each computer.
 
 ## Plan and compare heating solutions
 

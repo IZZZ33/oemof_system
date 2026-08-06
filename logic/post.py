@@ -130,6 +130,42 @@ class Post(object):
                     if nd.get('scalars') is not None:
                         print(nd['scalars'])
 
+    def _all_flow_totals(self):
+        """Return one total for every flow edge in the raw solph results."""
+        rows = []
+        for edge, result in self.oemof_res_raw.items():
+            if (
+                not isinstance(edge, tuple)
+                or len(edge) != 2
+                or edge[0] is None
+                or edge[1] is None
+                or not isinstance(result, dict)
+            ):
+                continue
+
+            sequences = result.get('sequences')
+            if sequences is None or sequences.empty:
+                continue
+
+            for column in sequences.columns:
+                variable = column[-1] if isinstance(column, tuple) else column
+                if str(variable).lower() != 'flow':
+                    continue
+                values = pd.to_numeric(sequences[column], errors='coerce')
+                rows.append({
+                    'From': str(getattr(edge[0], 'label', edge[0])),
+                    'To': str(getattr(edge[1], 'label', edge[1])),
+                    'Total flow': values.sum(min_count=1),
+                })
+
+        if not rows:
+            return pd.DataFrame(columns=['From', 'To', 'Total flow'])
+        return (
+            pd.DataFrame(rows)
+            .groupby(['From', 'To'], as_index=False, sort=False)['Total flow']
+            .sum(min_count=1)
+        )
+
     def _result_to_excel(self):
         # define the file names for the results
         excel_result = 'results.xlsx'
@@ -151,7 +187,9 @@ class Post(object):
         # create new dataframes for simulation results to put needed information (names and values) together,
         # which are separated in different result dataframes created by oemof
         df_scalar = pd.DataFrame(columns=['Component', 'Invest'])
-        df_sum_flows = pd.DataFrame()
+        # Aggregate raw edge results instead of parsing the string form of
+        # bus-view column tuples. This includes every oemof flow exactly once.
+        df_sum_flows = self._all_flow_totals()
 
         for k in ['source', 'transformer']:
             for key in self.esys_dict:
@@ -186,14 +224,10 @@ class Post(object):
                     nd = solph.views.node(self.oemof_res_raw, self.esys_dict[key][1])
                     # print(f'{self.esys_dict[key][0]} ---- {self.esys_dict[key][1]}')
                     # write sequences results into Excel file
-                    # and save the total flows in created dataframe
+                    # The complete flow summary is created directly from raw
+                    # edge results; bus views are only used for hourly sheets.
                     if nd.get('sequences') is not None:
                         nd['sequences'].to_excel(writer, sheet_name=self.esys_dict[key][1])
-                        sum_flows_series = nd['sequences'].sum()
-                        new_row_sum_flows = pd.DataFrame({'From, To': sum_flows_series.index,
-                                                          'Total flow': sum_flows_series.values})
-                        # print(f'{new_row_sum_flows}')
-                        df_sum_flows = pd.concat([df_sum_flows, new_row_sum_flows], axis=0)
 
         pd.set_option('display.max_rows', None)
         pd.set_option('display.max_columns', None)
@@ -201,24 +235,6 @@ class Post(object):
         print('******************** investment saved to excel file ********************')
         print(df_scalar)
 
-        # Drop certain unwanted rows which contains status data but not flows
-        # Status data are only generated for Transformers with nonconvex operation areas
-        # df_sum_flows.drop(df_sum_flows[df_sum_flows['From, To'].astype(str).str.contains('status')].index,inplace=True)
-        df_sum_flows = df_sum_flows[df_sum_flows['From, To'].astype(str).str.contains('flow', case=False, na=False)]
-        # print(df_sum_flows)
-        # print(f'col num: {df_sum_flows.shape[0]}')
-
-        # set proper name for the columns of flow directions for the total flows
-        df_sum_flows['From, To'] = df_sum_flows['From, To'].astype(str).str.replace('(', '', regex=False)\
-            .str.replace(')', '', regex=False).str.replace(", 'flow'", '', regex=False)\
-            .str.replace("'", '', regex=False).str.replace(", None", '', regex=False)
-        df_sum_flows[['From', 'To']] = df_sum_flows['From, To'].str.split(',', expand=True)
-        df_sum_flows.drop('From, To', axis=1, inplace=True)
-
-        # put the results in wanted order (values in last column)
-        cols_sum_flows = list(df_sum_flows.columns)
-        cols_sum_flows.append(cols_sum_flows.pop(cols_sum_flows.index('Total flow')))
-        df_sum_flows = df_sum_flows[cols_sum_flows]
         print('******************** total flows saved to excel file ********************')
 
         # write results of investment and total flows to Excel file

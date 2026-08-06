@@ -1,0 +1,30 @@
+
+Gurobi 10.0.1 (win64) logging started Thu Aug  6 18:48:35 2026
+
+Set parameter LogFile to value "C:\Users\ShixinNi\Documents\GitHub\oemof_system\results\Project_260803\S7\gurobi.log"
+Gurobi Optimizer version 10.0.1 build v10.0.1rc0 (win64)
+
+CPU model: Intel(R) Core(TM) i5-8500 CPU @ 3.00GHz, instruction set [SSE2|AVX|AVX2]
+Thread count: 6 physical cores, 6 logical processors, using up to 6 threads
+
+Academic license 2521723 - for non-commercial use only - registered to sh___@tu-berlin.de
+Optimize a model with 350416 rows, 665770 columns and 1152249 nonzeros
+Model fingerprint: 0xa59253bb
+Coefficient statistics:
+  Matrix range     [6e-04, 7e+00]
+  Objective range  [2e-02, 1e+20]
+  Bounds range     [1e+03, 1e+10]
+  RHS range        [8e-01, 9e+13]
+Warning: Model contains large objective coefficients
+Warning: Model contains large rhs
+Warning: Model contains large bounds
+Presolve removed 231858 rows and 489962 columns
+Presolve time: 0.67s
+Presolved: 118558 rows, 175808 columns, 404156 nonzeros
+
+Iteration    Objective       Primal Inf.    Dual Inf.      Time
+       0   -1.1738400e+33   3.825250e+33   1.173840e+03      1s
+   68759    8.8720495e+05   0.000000e+00   0.000000e+00      5s
+
+Solved in 68759 iterations and 5.02 seconds (4.74 work units)
+Optimal objective  8.872049500e+05

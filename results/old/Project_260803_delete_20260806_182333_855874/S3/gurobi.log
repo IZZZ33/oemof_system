@@ -1,0 +1,50 @@
+
+Gurobi 10.0.1 (win64) logging started Thu Aug  6 15:54:27 2026
+
+Set parameter LogFile to value "C:\Users\ShixinNi\Documents\GitHub\oemof_system\results\Project_260803\S3\gurobi.log"
+Gurobi Optimizer version 10.0.1 build v10.0.1rc0 (win64)
+
+CPU model: Intel(R) Core(TM) i5-8500 CPU @ 3.00GHz, instruction set [SSE2|AVX|AVX2]
+Thread count: 6 physical cores, 6 logical processors, using up to 6 threads
+
+Academic license 2521723 - for non-commercial use only - registered to sh___@tu-berlin.de
+Optimize a model with 569434 rows, 876030 columns and 1818045 nonzeros
+Model fingerprint: 0x2bc29a46
+Variable types: 876021 continuous, 9 integer (9 binary)
+Coefficient statistics:
+  Matrix range     [6e-04, 1e+10]
+  Objective range  [2e-02, 1e+20]
+  Bounds range     [1e+00, 1e+10]
+  RHS range        [3e+00, 9e+13]
+Warning: Model contains large matrix coefficient range
+Warning: Model contains large objective coefficients
+Warning: Model contains large rhs
+Warning: Model contains large bounds
+Presolve removed 353892 rows and 576350 columns
+Presolve time: 1.93s
+Presolved: 215542 rows, 299680 columns, 818337 nonzeros
+Variable types: 299671 continuous, 9 integer (9 binary)
+
+Root simplex log...
+
+Iteration    Objective       Primal Inf.    Dual Inf.      Time
+       0   -6.2752200e+32   1.323250e+33   6.275220e+02     11s
+   52557    6.6054284e+05   3.214357e+06   0.000000e+00     15s
+   79261    7.3813962e+05   7.378410e+05   0.000000e+00     20s
+  102488    7.5641078e+05   1.882884e+06   0.000000e+00     25s
+  111010    7.5855349e+05   0.000000e+00   0.000000e+00     29s
+
+Root relaxation: objective 7.585535e+05, 111010 iterations, 17.82 seconds (25.93 work units)
+
+    Nodes    |    Current Node    |     Objective Bounds      |     Work
+ Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+
+*    0     0               0    758553.48924 758553.489  0.00%     -   28s
+
+Explored 1 nodes (111010 simplex iterations) in 28.88 seconds (28.39 work units)
+Thread count was 6 (of 6 available processors)
+
+Solution count 1: 758553 
+
+Optimal solution found (tolerance 1.00e-04)
+Best objective 7.585534892408e+05, best bound 7.585534892408e+05, gap 0.0000%

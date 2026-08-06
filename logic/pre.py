@@ -1,7 +1,35 @@
 import logging
+import math
 import pandas as pd
 import oemof.solph as solph
 from oemof.tools import logger
+
+
+def _validated_emission_factor(row, sheet_name: str) -> float:
+    column = "emission factor" if "emission factor" in row.index else "emission_factor"
+    value = pd.to_numeric(row.get(column), errors="coerce")
+    if pd.isna(value) or not math.isfinite(float(value)):
+        raise ValueError(
+            f"Active component '{row.get('label', 'unknown')}' in sheet "
+            f"'{sheet_name}' has no valid emission factor."
+        )
+    return float(value)
+
+
+def _validated_investment_parameter(
+    row, sheet_name: str, column: str, *, minimum: float | None = None
+) -> float:
+    value = pd.to_numeric(row.get(column), errors="coerce")
+    if (
+        pd.isna(value)
+        or not math.isfinite(float(value))
+        or (minimum is not None and float(value) < minimum)
+    ):
+        raise ValueError(
+            f"Active investment component '{row.get('label', 'unknown')}' in "
+            f"sheet '{sheet_name}' has no valid {column}."
+        )
+    return float(value)
 
 
 class Pre(object):
@@ -27,9 +55,30 @@ class Pre(object):
         self.esys = None
 
         # function calls:
-        self._read_nodes_from_excel()
-        self._create_energysystem_nodes()
-        self._create_energysystem_oemof()
+        try:
+            self._read_nodes_from_excel()
+            self._create_energysystem_nodes()
+            self._create_energysystem_oemof()
+        except Exception:
+            self.close()
+            raise
+
+    def close(self):
+        """Release the scenario workbook deterministically on every platform."""
+        excel_file = getattr(self, "xls_oemof_input_file", None)
+        if excel_file is not None:
+            try:
+                excel_file.close()
+            finally:
+                self.xls_oemof_input_file = None
+
+    def __del__(self):
+        # A best-effort safety net for callers outside OEMOFSim. Normal runs
+        # close explicitly in OEMOFSim and do not depend on garbage collection.
+        try:
+            self.close()
+        except Exception:
+            pass
 
     def _read_nodes_from_excel(self):
         """Module for reading nodes of EnergySystem based on xls-file"""
@@ -147,7 +196,11 @@ class Pre(object):
                         outputs={
                             busd[cs["to"]]: solph.Flow(
                                 variable_costs=cs["variable costs"],
-                                custom_attributes={"emission_factor": cs["emission factor"]},
+                                custom_attributes={
+                                    "emission_factor": _validated_emission_factor(
+                                        cs, "sources"
+                                    )
+                                },
                                 nominal_value=cs["nominal value"],
                                 full_load_time_max = cs["full load time"]
                             )
@@ -163,15 +216,26 @@ class Pre(object):
                 # get time series for node and parameter
                 for col in nd["timeseries"].columns.values:
                     if col.split(".")[0] == re["type"]:
-                        # outflow_args[col.split(".")[1]] = nd["timeseries"][col]
-                        outflow_args['max'] = nd["timeseries"][col]
-                outflow_args.update(custom_attributes={"emission_factor": re['emission_factor']})
+                        outflow_args[col.split(".")[1]] = nd["timeseries"][col]
+                        # outflow_args['max'] = nd["timeseries"][col]
+                outflow_args.update(
+                    custom_attributes={
+                        "emission_factor": _validated_emission_factor(
+                            re, "renewables"
+                        )
+                    }
+                )
                 if re['invest'] == 1:
                     outflow_args.update({'nominal_value': None})
-                    ep_costs = re['ep_costs']
+                    ep_costs = _validated_investment_parameter(
+                        re, "renewables", "ep_costs", minimum=0
+                    )
+                    maximum = _validated_investment_parameter(
+                        re, "renewables", "maximum", minimum=0
+                    )
                     outflow_args.update({'investment': solph.Investment(
                         ep_costs=ep_costs,
-                        maximum=re['maximum']
+                        maximum=maximum
                     )})
                 # create
                 nodes.append(
@@ -279,7 +343,11 @@ class Pre(object):
                     inputs={busd[fit["from"]]: solph.Flow()},
                     outputs={
                         busd[fit["to 1"]]: solph.Flow(
-                            custom_attributes={"emission_factor": fit["emission_factor"]},
+                            custom_attributes={
+                                "emission_factor": _validated_emission_factor(
+                                    fit, "feed_in_trafo"
+                                )
+                            },
                             # if not fit["runtime_limit"]
                             # else {"emission_factor": fit["emission_factor"],
                             #       "runtime_limit_factor": 1

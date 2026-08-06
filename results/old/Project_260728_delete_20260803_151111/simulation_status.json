@@ -1,0 +1,7 @@
+{
+  "project_name": "Project_260728",
+  "state": "failed",
+  "updated_at": "2026-08-03T13:11:11.561933+00:00",
+  "input_fingerprint": "a5f1699bbc70387f2021a88e9e623056f38bcfebc29d4681b865493adafc08b2",
+  "error": "Solver (gurobi) did not exit normally"
+}

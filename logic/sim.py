@@ -5,8 +5,106 @@ import networkx as nx
 import matplotlib.pyplot as plt
 import logging
 import pickle
+from pathlib import Path
+import shutil
+import sys
 import logic.custom_constraints as custom_constraints
 from oemof.network.graph import create_nx_graph
+
+
+def _ensure_gurobi_available() -> str:
+    """Locate the Gurobi launcher required by Pyomo's shell interface."""
+    launcher_name = "gurobi.bat" if os.name == "nt" else "gurobi"
+    configured = shutil.which("gurobi")
+    if configured:
+        return configured
+
+    candidates = []
+    explicit_path = os.environ.get("OEMOF_GUROBI_PATH")
+    if explicit_path:
+        explicit = Path(explicit_path).expanduser()
+        candidates.append(
+            explicit / launcher_name if explicit.is_dir() else explicit
+        )
+
+    gurobi_home = os.environ.get("GUROBI_HOME")
+    if gurobi_home:
+        home = Path(gurobi_home).expanduser()
+        candidates.extend(
+            [
+                home / "bin" / launcher_name,
+                home / "win64" / "bin" / launcher_name,
+            ]
+        )
+
+    if os.name == "nt":
+        candidates.append(Path("C:/gurobi/win64/bin") / launcher_name)
+        for root in (Path("C:/"), Path(os.environ.get("ProgramFiles", "C:/Program Files"))):
+            try:
+                candidates.extend(
+                    sorted(root.glob(f"gurobi*/win64/bin/{launcher_name}"), reverse=True)
+                )
+            except OSError:
+                pass
+
+        # Conda may install the command-line solver in its base directory while
+        # the application runs from a separate named environment.
+        conda_prefix = Path(os.environ.get("CONDA_PREFIX", sys.prefix))
+        if conda_prefix.parent.name.lower() == "envs":
+            candidates.append(conda_prefix.parent.parent / launcher_name)
+
+    seen = set()
+    for candidate in candidates:
+        candidate = candidate.expanduser()
+        candidate_key = os.path.normcase(str(candidate))
+        if candidate_key in seen or not candidate.is_file():
+            continue
+        seen.add(candidate_key)
+        os.environ["PATH"] = str(candidate.parent) + os.pathsep + os.environ.get(
+            "PATH", ""
+        )
+
+        # A portable installation may keep its licence beside the installation
+        # root rather than in the user's home folder.
+        install_root = candidate.parent
+        if install_root.name.lower() == "bin" and install_root.parent.name.lower() == "win64":
+            install_root = install_root.parent.parent
+        license_candidates = [
+            install_root / "gurobi.lic",
+            candidate.parent / "gurobi.lic",
+            Path.home() / "gurobi.lic",
+        ]
+        if "GRB_LICENSE_FILE" not in os.environ:
+            for license_file in license_candidates:
+                if license_file.is_file():
+                    os.environ["GRB_LICENSE_FILE"] = str(license_file)
+                    break
+        return str(candidate)
+
+    raise RuntimeError(
+        "Gurobi could not be found. Install Gurobi, activate a valid licence, "
+        "and add the Gurobi bin directory to PATH, set GUROBI_HOME, set "
+        "OEMOF_GUROBI_PATH to the launcher or bin directory, or install "
+        "gurobipy in the active Python environment. "
+        f"The application is running with {sys.executable}."
+    )
+
+
+def _gurobi_solver_configuration() -> tuple[str, str | None, str]:
+    """Choose a Python-native solver first, then the external launcher."""
+    try:
+        from pyomo.environ import SolverFactory
+
+        direct_solver = SolverFactory("gurobi_direct")
+        if direct_solver.available(exception_flag=False):
+            import gurobipy
+
+            return "gurobi_direct", None, str(Path(gurobipy.__file__).resolve())
+    except Exception:
+        pass
+
+    launcher = _ensure_gurobi_available()
+    return "gurobi", "mps", launcher
 
 
 class Sim(object):
@@ -166,9 +264,44 @@ class Sim(object):
             print('Grab a coffee, an apple or just relax! Might take a while.')
             print('\t...')
 
-            self.oemof_model.solve(solver='gurobi', solver_io="mps",
-                                   # threads=8,
-                                   solve_kwargs={'tee': False})
+            solver_name, solver_io, solver_location = _gurobi_solver_configuration()
+            logging.info(
+                "Using Gurobi interface %s from: %s",
+                solver_name,
+                solver_location,
+            )
+            solver_log_path = Path(self.oemof_pre.p_results) / "gurobi.log"
+            solver_arguments = {
+                "solver": solver_name,
+                "solve_kwargs": {"tee": False},
+                # Gurobi's default concurrent root-LP method keeps several
+                # algorithm copies in memory. Large annual models can exhaust
+                # RAM before the first branch-and-bound node. Dual simplex uses
+                # one algorithm and is substantially less memory intensive.
+                "cmdline_options": {
+                    "Method": 1,
+                    "NumericFocus": 1,
+                    "NodefileStart": 0.5,
+                    "LogFile": str(solver_log_path),
+                },
+            }
+            if solver_io is not None:
+                solver_arguments["solver_io"] = solver_io
+            try:
+                self.oemof_model.solve(**solver_arguments)
+            except Exception as exc:
+                try:
+                    solver_log = solver_log_path.read_text(
+                        encoding="utf-8", errors="replace"
+                    )
+                except OSError:
+                    solver_log = ""
+                if "out of memory" in solver_log.lower():
+                    raise RuntimeError(
+                        "Gurobi ran out of memory while solving this scenario. "
+                        "The model is too large for the currently available RAM."
+                    ) from exc
+                raise
             # self.oemof_model.solve(solver='gurobi', threads=8, solve_kwargs={'tee': False})
             self.oemof_solph_results = solph.processing.results(self.oemof_model)
             self.oemof_solph_meta_results = solph.processing.meta_results(self.oemof_model)

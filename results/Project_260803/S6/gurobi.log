@@ -1,0 +1,55 @@
+
+Gurobi 10.0.1 (win64) logging started Thu Aug  6 18:44:24 2026
+
+Set parameter LogFile to value "C:\Users\ShixinNi\Documents\GitHub\oemof_system\results\Project_260803\S6\gurobi.log"
+Gurobi Optimizer version 10.0.1 build v10.0.1rc0 (win64)
+
+CPU model: Intel(R) Core(TM) i5-8500 CPU @ 3.00GHz, instruction set [SSE2|AVX|AVX2]
+Thread count: 6 physical cores, 6 logical processors, using up to 6 threads
+
+Academic license 2521723 - for non-commercial use only - registered to sh___@tu-berlin.de
+Optimize a model with 490579 rows, 858494 columns and 1625289 nonzeros
+Model fingerprint: 0xaa0484f7
+Coefficient statistics:
+  Matrix range     [6e-04, 7e+00]
+  Objective range  [1e-03, 1e+20]
+  Bounds range     [1e+03, 1e+10]
+  RHS range        [5e-01, 9e+13]
+Warning: Model contains large objective coefficients
+Warning: Model contains large rhs
+Warning: Model contains large bounds
+Presolve removed 307541 rows and 559322 columns
+Presolve time: 0.92s
+Presolved: 183038 rows, 299172 columns, 688356 nonzeros
+
+Iteration    Objective       Primal Inf.    Dual Inf.      Time
+       0   -1.1913600e+33   7.729750e+33   1.191360e+03      1s
+   65714    3.9400102e+05   2.763204e+06   0.000000e+00      5s
+   89595    4.7622997e+05   1.450681e+06   0.000000e+00     10s
+  103824    4.9072152e+05   1.462253e+06   0.000000e+00     15s
+  110376    4.9778386e+05   2.222955e+06   0.000000e+00     20s
+  117415    5.0280388e+05   1.050025e+06   0.000000e+00     25s
+  123967    5.0699835e+05   1.317659e+06   0.000000e+00     30s
+  128881    5.0986614e+05   2.158809e+07   0.000000e+00     35s
+  134731    5.1178424e+05   2.329746e+05   0.000000e+00     40s
+  139177    5.1253786e+05   7.499064e+04   0.000000e+00     45s
+  143899    6.7678056e+05   0.000000e+00   4.279899e+05     50s
+  150486    6.3365836e+05   0.000000e+00   1.730505e+04     55s
+  152510    6.2458233e+05   0.000000e+00   6.024569e+03     60s
+  155405    6.1613640e+05   0.000000e+00   4.203002e+03     65s
+  157423    6.1286809e+05   0.000000e+00   1.540000e+05     70s
+  160045    6.0917858e+05   0.000000e+00   1.242340e+03     75s
+  162837    6.0698524e+05   0.000000e+00   1.475094e+03     80s
+  165079    6.0512517e+05   0.000000e+00   7.835866e+02     85s
+  167391    6.0434389e+05   0.000000e+00   4.456515e+02     90s
+  169849    6.0359920e+05   0.000000e+00   4.857702e+02     95s
+Warning: switch to quad precision
+  176101    6.0450020e+05   5.208457e+03   5.908921e+09    100s
+  181925    6.0369942e+05   0.000000e+00   9.648015e+02    105s
+  183035    6.0319409e+05   0.000000e+00   2.041323e+02    110s
+  183925    6.0317983e+05   0.000000e+00   4.972846e+00    115s
+Extra simplex iterations after uncrush: 10543
+  184549    6.0317650e+05   0.000000e+00   0.000000e+00    121s
+
+Solved in 184549 iterations and 121.18 seconds (278.45 work units)
+Optimal objective  6.031765042e+05

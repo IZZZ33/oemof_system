@@ -1,0 +1,56 @@
+
+Gurobi 10.0.1 (win64) logging started Thu Aug  6 15:43:51 2026
+
+Set parameter LogFile to value "C:\Users\ShixinNi\Documents\GitHub\oemof_system\results\Project_260803\S1\gurobi.log"
+Gurobi Optimizer version 10.0.1 build v10.0.1rc0 (win64)
+
+CPU model: Intel(R) Core(TM) i5-8500 CPU @ 3.00GHz, instruction set [SSE2|AVX|AVX2]
+Thread count: 6 physical cores, 6 logical processors, using up to 6 threads
+
+Academic license 2521723 - for non-commercial use only - registered to sh___@tu-berlin.de
+Optimize a model with 639519 rows, 946114 columns and 2054574 nonzeros
+Model fingerprint: 0xc196ec03
+Variable types: 946102 continuous, 12 integer (12 binary)
+Coefficient statistics:
+  Matrix range     [6e-04, 1e+10]
+  Objective range  [1e-03, 1e+20]
+  Bounds range     [1e+00, 1e+10]
+  RHS range        [3e+01, 9e+13]
+Warning: Model contains large matrix coefficient range
+Warning: Model contains large objective coefficients
+Warning: Model contains large rhs
+Warning: Model contains large bounds
+Found heuristic solution: objective 9.384515e+26
+Presolve removed 415208 rows and 628906 columns
+Presolve time: 3.13s
+Presolved: 224311 rows, 317208 columns, 923477 nonzeros
+Variable types: 317196 continuous, 12 integer (12 binary)
+
+Root simplex log...
+
+Iteration    Objective       Primal Inf.    Dual Inf.      Time
+   11011   -3.2588800e+32   6.080000e+32   3.258880e+02      5s
+   54402    3.7741328e+05   4.730982e+06   0.000000e+00     10s
+   91710    5.5442000e+05   3.502452e+06   0.000000e+00     15s
+  109754    5.9868739e+05   1.343944e+06   0.000000e+00     20s
+  129471    6.3431374e+05   9.205569e+05   0.000000e+00     25s
+  145136    6.5314709e+05   1.166231e+06   0.000000e+00     30s
+  148976    6.5896202e+05   4.654602e+05   0.000000e+00     35s
+  158215    6.6976940e+05   1.290882e+06   0.000000e+00     40s
+  167675    6.7188970e+05   1.101270e+04   0.000000e+00     45s
+  169717    6.7192780e+05   0.000000e+00   0.000000e+00     47s
+
+Root relaxation: objective 6.719278e+05, 169717 iterations, 43.21 seconds (43.30 work units)
+
+    Nodes    |    Current Node    |     Objective Bounds      |     Work
+ Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+
+*    0     0               0    671927.79674 671927.797  0.00%     -   47s
+
+Explored 1 nodes (169717 simplex iterations) in 47.52 seconds (46.13 work units)
+Thread count was 6 (of 6 available processors)
+
+Solution count 2: 671928 9.38452e+26 
+
+Optimal solution found (tolerance 1.00e-04)
+Best objective 6.719277967384e+05, best bound 6.719277967384e+05, gap 0.0000%

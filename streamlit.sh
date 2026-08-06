@@ -1,2 +1,4 @@
 #!/bin/bash
-C:/ProgramData/Anaconda3/envs/venv_autom_oemof_v05_1/Scripts/streamlit run logic/data_input.py
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR" || exit 1
+python -m streamlit run "$SCRIPT_DIR/logic/data_input.py"

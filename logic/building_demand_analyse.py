@@ -65,6 +65,17 @@ RETROFIT_NONRES_DEMAND_FACTORS = {
     "retrofit": 0.72,
     "advanced retrofit": 0.48,
 }
+ZERO_HEAT_DEMAND_BUILDING_TYPES = {
+    "garage", "garages", "carport", "shed", "storage", "warehouse",
+    "greenhouse", "barn", "hangar", "industrial", "utility", "kiosk",
+    "containers", "container", "parking", "parking_garage",
+    "farm_auxiliary", "conservatory", "cowshed", "stable", "sty",
+    "allotment_house", "boathouse", "windmill", "bunker", "roof",
+    "construction", "outbuilding", "service", "tech_cab",
+    "transformer_tower", "ruins", "demolished", "abandoned", "entrance",
+    "gatehouse", "watchtower", "silo", "water_tower", "pump_house",
+    "substation", "chimney", "power_plant",
+}
 
 SPACE_HEATING_DEMAND_LABEL = "Last_SH"
 DHW_DEMAND_LABEL = "Last_DHW"
@@ -101,7 +112,41 @@ def _scenario_demand_mismatches(project_name, space_heat_kwh, dhw_kwh):
     return mismatches
 
 
-def _update_scenario_demands(paths, space_heat_kwh, dhw_kwh, dhw_profile_df=None):
+def _current_estimated_building_count():
+    """Return the number of buildings represented by the current SH estimate."""
+    estimates = st.session_state.get("building_demand_estimates")
+    if not isinstance(estimates, pd.DataFrame) or estimates.empty:
+        return None
+    for column in ("heat_demand_kWh", "Annual Space Heating Demand (kWh)", "demand_kwh_final"):
+        if column in estimates.columns:
+            values = pd.to_numeric(estimates[column], errors="coerce")
+            return int((values.notna() & values.gt(0)).sum())
+    return int(len(estimates))
+
+
+def _reconcile_excluded_bidx(excluded_bidx, buildings, manual_buildings=None):
+    """Drop exclusions for buildings that are no longer in any selected area."""
+    valid_building_ids = set()
+    if isinstance(buildings, pd.DataFrame) and "bidx" in buildings.columns:
+        valid_building_ids.update(buildings["bidx"].dropna().astype(str))
+    if (
+            isinstance(manual_buildings, pd.DataFrame)
+            and not manual_buildings.empty
+            and "bidx" in manual_buildings.columns
+    ):
+        valid_building_ids.update(manual_buildings["bidx"].dropna().astype(str))
+    return set(map(str, excluded_bidx or set())) & valid_building_ids
+
+
+def _update_scenario_demands(
+        paths,
+        space_heat_kwh,
+        dhw_kwh,
+        dhw_profile_df=None,
+        update_building_count=False,
+        building_count=None,
+        profile_updater=None,
+):
     """Update the automatically imported demand rows in existing scenarios."""
     expected = {
         SPACE_HEATING_DEMAND_LABEL: float(space_heat_kwh),
@@ -162,12 +207,22 @@ def _update_scenario_demands(paths, space_heat_kwh, dhw_kwh, dhw_profile_df=None
                     for row_idx, value in enumerate(values, start=2):
                         ws.cell(row_idx, target_col, float(value))
                     wb.save(path)
+        if update_building_count and building_count is not None:
+            if not callable(profile_updater):
+                raise RuntimeError("The scenario profile updater is not available.")
+            profile_updater(
+                str(path),
+                building_count=int(building_count),
+            )
+            st.session_state.pop(f"scenario_building_count_{path.name}", None)
         updated.append(path.name)
     return updated
 
 def _std_estimates_df(df: pd.DataFrame) -> pd.DataFrame:
     if df is None or df is False or df.empty:
-        return pd.DataFrame(columns=["input_index", "heat_demand_kWh"])
+        return pd.DataFrame(columns=[
+            "input_index", "heat_demand_kWh", "peak_load_kW", "estimation_method"
+        ])
     d = df.copy()
 
     if "bidx" in d.columns and "input_index" not in d.columns:
@@ -179,14 +234,26 @@ def _std_estimates_df(df: pd.DataFrame) -> pd.DataFrame:
                 break
 
     if "input_index" not in d.columns or "heat_demand_kWh" not in d.columns:
-        return pd.DataFrame(columns=["input_index", "heat_demand_kWh"])
+        return pd.DataFrame(columns=[
+            "input_index", "heat_demand_kWh", "peak_load_kW", "estimation_method"
+        ])
 
     d["input_index"] = d["input_index"].astype(str)
     d["heat_demand_kWh"] = pd.to_numeric(d["heat_demand_kWh"], errors="coerce")
+    if "peak_load_kW" not in d.columns:
+        for alternate in ("peak_kw", "peak_kw_final", "peak_kw_auto"):
+            if alternate in d.columns:
+                d = d.rename(columns={alternate: "peak_load_kW"})
+                break
+    if "peak_load_kW" not in d.columns:
+        d["peak_load_kW"] = np.nan
+    d["peak_load_kW"] = pd.to_numeric(d["peak_load_kW"], errors="coerce")
+    if "estimation_method" not in d.columns:
+        d["estimation_method"] = "legacy annual-demand estimate"
 
     d = d.reset_index(drop=True)
     d = d.drop_duplicates(subset=["input_index"], keep="last")
-    return d[["input_index", "heat_demand_kWh"]]
+    return d[["input_index", "heat_demand_kWh", "peak_load_kW", "estimation_method"]]
 
 def _std_dhw_estimates_df(df: pd.DataFrame) -> pd.DataFrame:
     if df is None or df is False or getattr(df, "empty", True):
@@ -300,12 +367,13 @@ def _normalize_retrofit_situation(v):
     }
     return aliases.get(key)
 
-def _to_bool_series(s: pd.Series) -> pd.Series:
+def _to_bool_series(s: pd.Series, default: bool = False) -> pd.Series:
     """
     Convert a column that might contain True/False, 1/0, 'WAHR'/'FALSCH',
     'TRUE'/'FALSE', 'yes'/'no', etc. into a clean boolean Series.
 
-    Unknown / empty values become False.
+    Unknown / empty values use ``default``. Existing callers retain False;
+    persisted inclusion columns can explicitly request True.
     """
     if s is None:
         return pd.Series([], dtype=bool)
@@ -313,12 +381,15 @@ def _to_bool_series(s: pd.Series) -> pd.Series:
     v = s.astype(str).str.strip().str.lower()
 
     truthy = {"1", "true", "wahr", "yes", "y", "ja"}
-    falsy  = {"0", "false", "falsch", "no", "n", "nein", "", "nan", "none"}
+    falsy  = {"0", "false", "falsch", "no", "n", "nein"}
+    missing = {"", "nan", "none"}
 
+    fallback = bool(default)
     out = v.map(
         lambda x: True if x in truthy
         else False if x in falsy
-        else False  # unknown values -> False
+        else fallback if x in missing
+        else fallback
     )
     return out.astype(bool)
 
@@ -1218,6 +1289,8 @@ def _rehydrate_project_state(loaded):
     ss["show_teaser_results"] = not ss["building_demand_estimates"].empty
     ss["show_dhw_results"] = not dhw_est.empty
     ss["_osm_preloaded"] = True
+    # Loading and normalizing persisted workbook data is not a user edit.
+    ss["_persist_dirty"] = False
 
 def get_project_data_file(project_name: str):
     """Per-project workbook to store OSM selection state."""
@@ -1605,6 +1678,11 @@ def _build_unified_dataset(
         bt_source = g.get("building_type_source", pd.Series([None] * n, index=g.index)).fillna("")
         year_source = g.get("year_built_source", pd.Series([None] * n, index=g.index)).fillna("")
         retrofit_source = g.get("retrofit_situation_source", pd.Series([None] * n, index=g.index)).fillna("")
+        zero_demand_mask = bt_final.isin(ZERO_HEAT_DEMAND_BUILDING_TYPES)
+        retrofit_final = retrofit_final.mask(zero_demand_mask)
+        retrofit_base = retrofit_base.mask(zero_demand_mask)
+        retrofit_probability = retrofit_probability.mask(zero_demand_mask)
+        retrofit_source = retrofit_source.mask(zero_demand_mask, "")
 
         edited_type = (bt_source.astype(str).str.lower().eq("user")) | (
             (bt_base.fillna("__") != bt_final.fillna("__"))
@@ -1693,6 +1771,7 @@ def _build_unified_dataset(
         area = pd.to_numeric(m["area (m²)"], errors="coerce")
         year = pd.to_numeric(m.get("year built", pd.Series([np.nan] * len(m))), errors="coerce")
         retrofit = m.get("retrofit situation", pd.Series([None] * len(m), index=m.index)).apply(_normalize_retrofit_situation)
+        retrofit = retrofit.mask(bt.isin(ZERO_HEAT_DEMAND_BUILDING_TYPES))
         name_series = m.get("name")
         bt_source = m.get("building type source", pd.Series([None] * len(m), index=m.index))
         bt_source = bt_source.where(
@@ -1729,7 +1808,9 @@ def _build_unified_dataset(
             "year_built_source": year_source,
             "retrofit_situation_base": retrofit,
             "retrofit_situation_final": retrofit,
-            "retrofit_situation_source": "manual",
+            "retrofit_situation_source": np.where(
+                bt.isin(ZERO_HEAT_DEMAND_BUILDING_TYPES), None, "manual"
+            ),
             "retrofit_probability": np.nan,
             "zensus_age_class": m.get("zensus age class", pd.Series([None] * len(m), index=m.index)),
             "zensus_type_class": m.get("zensus type class", pd.Series([None] * len(m), index=m.index)),
@@ -1898,7 +1979,7 @@ def reset_project_state():
     for k in PROJECT_STATE_KEYS:
         st.session_state.pop(k, None)
 
-def run_building_heat_demand_page():
+def run_building_heat_demand_page(scenario_profile_updater=None):
     ss = st.session_state
     if ss.get("weather_data_message"):
         st.info(f"Weather data: {ss['weather_data_message']}")
@@ -2852,14 +2933,7 @@ def run_building_heat_demand_page():
         'sports_centre': ('iwu_heavy', 'bmvbs_institute'), 'sports_hall': ('iwu_heavy', 'bmvbs_institute'),
     }
 
-    ZERO_DEMAND_TYPES = {
-        'garage', 'garages', 'carport', 'shed', 'storage', 'warehouse', 'greenhouse', 'barn', 'hangar',
-        'industrial', 'utility', 'kiosk', 'containers', 'container', 'parking', 'parking_garage',
-        'farm_auxiliary', 'conservatory', 'cowshed', 'stable', 'sty', 'allotment_house', 'boathouse',
-        'windmill', 'bunker', 'roof', 'construction', 'outbuilding', 'service', 'tech_cab',
-        'transformer_tower', 'ruins', 'demolished', 'abandoned', 'entrance', 'gatehouse', 'watchtower',
-        'silo', 'water_tower', 'pump_house', 'substation', 'chimney', 'power_plant',
-    }
+    ZERO_DEMAND_TYPES = ZERO_HEAT_DEMAND_BUILDING_TYPES
 
     def _building_geometry_values(building_tag, raw_levels=None, raw_height=None):
         """Return validated levels, total height and TEASER storey height.
@@ -2953,6 +3027,8 @@ def run_building_heat_demand_page():
         return float(np.clip(retrofit_probability * share, 0.0, retrofit_probability))
 
     def _estimate_retrofit_situation(building_tag, year_built, bidx=None):
+        if (norm_btype(building_tag) or "house") in ZERO_DEMAND_TYPES:
+            return None, 0.0
         probability = _retrofit_probability_for_building(building_tag, year_built)
         advanced_probability = _advanced_retrofit_probability(building_tag, year_built, probability)
         u = _stable_unit_interval("retrofit", bidx, norm_btype(building_tag), year_built)
@@ -2984,6 +3060,10 @@ def run_building_heat_demand_page():
             bidx = row.get(bidx_col)
             building_tag = row.get(type_col)
             year_built = row.get(year_col)
+            if (norm_btype(building_tag) or "house") in ZERO_DEMAND_TYPES:
+                out.at[idx, situation_col] = None
+                out.at[idx, probability_col] = np.nan
+                continue
             estimated_situation, probability = _estimate_retrofit_situation(building_tag, year_built, bidx)
             current = _normalize_retrofit_situation(row.get(situation_col))
             out.at[idx, situation_col] = current or estimated_situation
@@ -3365,42 +3445,61 @@ def run_building_heat_demand_page():
         "student_accommodation": "AB",
     }
 
+    DHW_RESIDENTIAL_DEFAULTS = {
+        "SFH": (50.0, 40.0),
+        "TH": (40.0, 40.0),
+        "MFH": (40.0, 35.0),
+        "AB": (35.0, 35.0),
+    }
+
     DHW_NONRES_DEFAULTS = {
-        "office": ("OB", 20.0, 5.0),
-        "office_building": ("OB", 20.0, 5.0),
-        "government": ("OB", 20.0, 5.0),
-        "townhall": ("OB", 20.0, 5.0),
-        "courthouse": ("OB", 20.0, 5.0),
-        "commercial": ("OB", 25.0, 5.0),
-        "civic": ("OB", 25.0, 5.0),
-        "fire_station": ("OB", 25.0, 5.0),
-        "police": ("OB", 25.0, 5.0),
-        "train_station": ("OB", 25.0, 5.0),
-        "school": ("SC", 12.0, 5.0),
-        "primary_school": ("SC", 12.0, 5.0),
-        "secondary_school": ("SC", 12.0, 5.0),
-        "school_building": ("SC", 12.0, 5.0),
-        "kindergarten": ("SC", 8.0, 8.0),
-        "childcare": ("SC", 8.0, 8.0),
+        "office": ("OB", 15.0, 5.0),
+        "office_building": ("OB", 15.0, 5.0),
+        "government": ("OB", 15.0, 5.0),
+        "townhall": ("OB", 15.0, 5.0),
+        "courthouse": ("OB", 15.0, 5.0),
+        "commercial": ("OB", 15.0, 5.0),
+        "fire_station": ("OB", 15.0, 5.0),
+        "police": ("OB", 15.0, 5.0),
+        "train_station": ("OB", 15.0, 5.0),
+        "school": ("SC", 8.0, 5.0),
+        "primary_school": ("SC", 8.0, 5.0),
+        "secondary_school": ("SC", 8.0, 5.0),
+        "school_building": ("SC", 8.0, 5.0),
+        "kindergarten": ("SC", 8.0, 5.0),
+        "childcare": ("SC", 8.0, 5.0),
         "university": ("UNI", 12.0, 5.0),
         "college": ("UNI", 12.0, 5.0),
-        "supermarket": ("GS", 35.0, 5.0),
-        "retail": ("RETAIL", 30.0, 5.0),
-        "restaurant": ("RE", 5.0, 10.0),
-        "hospital": ("HOSPITAL", 25.0, 40.0),
-        "care_home": ("HOSPITAL", 30.0, 40.0),
-        "museum": ("CULTURE", 40.0, 3.0),
-        "public": ("CULTURE", 40.0, 3.0),
-        "civic": ("CULTURE", 40.0, 3.0),
-        "religious": ("CULTURE", 40.0, 3.0),
-        "church": ("CULTURE", 40.0, 3.0),
-        "cathedral": ("CULTURE", 40.0, 3.0),
-        "mosque": ("CULTURE", 40.0, 3.0),
-        "temple": ("CULTURE", 40.0, 3.0),
-        "stadium": ("SPORT", 20.0, 15.0),
-        "sports_centre": ("SPORT", 20.0, 15.0),
-        "sports_hall": ("SPORT", 20.0, 15.0),
-        "industrial": ("WORKSHOP", 35.0, 5.0),
+        "supermarket": ("GS", 20.0, 3.0),
+        "retail": ("RETAIL", 15.0, 3.0),
+        "restaurant": ("RE", 2.0, 10.0),
+        "hospital": ("HOSPITAL", 50.0, 100.0),
+        "care_home": ("HOSPITAL", 50.0, 100.0),
+        "museum": ("CULTURE", 5.0, 3.0),
+        "public": ("CULTURE", 5.0, 3.0),
+        "civic": ("CULTURE", 5.0, 3.0),
+        "religious": ("CULTURE", 5.0, 3.0),
+        "church": ("CULTURE", 5.0, 3.0),
+        "cathedral": ("CULTURE", 5.0, 3.0),
+        "mosque": ("CULTURE", 5.0, 3.0),
+        "temple": ("CULTURE", 5.0, 3.0),
+        "stadium": ("SPORT", 10.0, 20.0),
+        "sports_centre": ("SPORT", 10.0, 20.0),
+        "sports_hall": ("SPORT", 10.0, 20.0),
+        "industrial": ("WORKSHOP", 20.0, 5.0),
+    }
+
+    DHW_NET_AREA_FACTOR_ALIASES = {
+        "office_building": "office",
+        "townhall": "government",
+        "courthouse": "government",
+        "primary_school": "school",
+        "secondary_school": "school",
+        "school_building": "school",
+        "childcare": "kindergarten",
+        "care_home": "hospital",
+        "sports_centre": "stadium",
+        "sports_hall": "stadium",
     }
 
     def _dhw_building_tag(val):
@@ -3499,8 +3598,6 @@ def run_building_heat_demand_page():
             buildings_df,
             s_step,
             categories,
-            residential_l_per_person_day,
-            residential_m2_per_person,
             temp_delta,
             include_nonres,
             nonres_multiplier,
@@ -3557,9 +3654,16 @@ def run_building_heat_demand_page():
             # Use the same category-based fallback as the TEASER calculation:
             # 0.75 for residential/unknown types and 0.50 for recognized
             # non-residential types without an explicit factor.
-            fallback_category = "non_residential" if building_tag in NON_RESIDENTIAL_TYPES else "residential"
+            fallback_category = (
+                "non_residential"
+                if building_tag in DHW_NONRES_DEFAULTS
+                else "residential"
+            )
+            net_factor_tag = DHW_NET_AREA_FACTOR_ALIASES.get(
+                building_tag, building_tag
+            )
             net_factor = NET_AREA_FACTORS.get(
-                building_tag,
+                net_factor_tag,
                 NET_AREA_FACTORS.get(fallback_category, 0.5),
             )
             net_floor_area = float(area) * levels * net_factor
@@ -3567,8 +3671,9 @@ def run_building_heat_demand_page():
 
             if building_tag in DHW_RESIDENTIAL_TYPE_MAP:
                 opendhw_type = DHW_RESIDENTIAL_TYPE_MAP[building_tag]
-                area_per_user = float(residential_m2_per_person)
-                l_per_user = float(residential_l_per_person_day)
+                area_per_user, l_per_user = DHW_RESIDENTIAL_DEFAULTS[
+                    opendhw_type
+                ]
                 basis = f"{area_per_user:g} m²/person, {l_per_user:g} L/person/day"
                 weekend_factor = 1.2
             elif include_nonres and building_tag in DHW_NONRES_DEFAULTS:
@@ -4441,7 +4546,15 @@ def run_building_heat_demand_page():
     sw = [bounds[1], bounds[0]];
     ne = [bounds[3], bounds[2]]
     fit_bounds = [sw, ne]
-    excluded = set(map(str, st.session_state.get("excluded_bidx", set())))
+    excluded_before = set(map(str, st.session_state.get("excluded_bidx", set())))
+    manual_buildings = st.session_state.get("manual_buildings")
+    excluded = _reconcile_excluded_bidx(
+        excluded_before,
+        buildings,
+        manual_buildings,
+    )
+    if excluded != excluded_before:
+        st.session_state["excluded_bidx"] = excluded
 
     st.markdown("---")
     st.markdown("### Check the Buildings Found on the Map")
@@ -5137,8 +5250,14 @@ def run_building_heat_demand_page():
 
     # ---------------- route length (only OSM included) ----------------
     buildings["gross_floor_area"] = buildings["area_m2"] * buildings["levels"]
-    gross_included = buildings.loc[~buildings["bidx"].isin(excluded), "gross_floor_area"].sum()
+    excluded_keys = set(map(str, excluded))
+    included_mask = ~buildings["bidx"].astype(str).isin(excluded_keys)
+    gross_included = buildings.loc[included_mask, "gross_floor_area"].sum()
     total_building_floor_area = gross_included
+    all_building_footprint = pd.to_numeric(buildings["area_m2"], errors="coerce").fillna(0).sum()
+    included_building_footprint = pd.to_numeric(
+        buildings.loc[included_mask, "area_m2"], errors="coerce"
+    ).fillna(0).sum()
 
     gdf = gpd.GeoDataFrame(geometry=[combined_polygon], crs="EPSG:4326")
     centroid = gdf.geometry.iloc[0].centroid
@@ -5147,8 +5266,20 @@ def run_building_heat_demand_page():
     utm_crs = f"+proj=utm +zone={utm_zone} +{'north' if is_northern else 'south'} +ellps=WGS84 +datum=WGS84 +units=m +no_defs"
     gdf_utm = gdf.to_crs(utm_crs)
     total_selected_ground_area = gdf_utm.geometry.iloc[0].area
-    plot_ratio = (total_building_floor_area / total_selected_ground_area) if total_selected_ground_area > 0 else 0
-    route_length = 16.171 * (plot_ratio ** 0.1495) * 1000 * total_selected_ground_area / 1_000_000  # [m]
+    if excluded_keys and all_building_footprint > 0:
+        included_area_share = included_building_footprint / all_building_footprint
+    else:
+        included_area_share = 1.0
+    included_area_share = min(max(float(included_area_share), 0.0), 1.0)
+    effective_selected_ground_area = total_selected_ground_area * included_area_share
+    plot_ratio = (
+        total_building_floor_area / effective_selected_ground_area
+        if effective_selected_ground_area > 0 else 0
+    )
+    route_length = (
+        16.171 * (plot_ratio ** 0.1495) * 1000 * effective_selected_ground_area / 1_000_000
+        if plot_ratio > 0 else 0.0
+    )  # [m]
 
     st.session_state["_last_buildings_gdf"] = buildings
 
@@ -5156,7 +5287,8 @@ def run_building_heat_demand_page():
         st.markdown(f"Estimated total route length for a centralized network: **{route_length:.0f} m**")
         st.caption(
             "This technical estimate is used later for district-heating network assumptions. "
-            "It is not required for checking individual building demand."
+            "It is not required for checking individual building demand. When buildings are excluded, "
+            "the effective selected area is reduced in proportion to the included building footprint."
         )
     st.session_state["route_length"] = route_length
     st.session_state["route_length_source"] = "building-demand area estimate"
@@ -5482,7 +5614,13 @@ def run_building_heat_demand_page():
 
         col_cfg_attr = {
             "building type": st.column_config.SelectboxColumn("building type", options=type_options),
-            "area (m²)": st.column_config.NumberColumn("area (m²)", min_value=0.0, step=1.0, format="%.2f"),
+            "area (m²)": st.column_config.NumberColumn(
+                "ground area (m²)",
+                min_value=0.0,
+                step=1.0,
+                format="%.2f",
+                help="Building footprint/ground area, not the total useful floor area.",
+            ),
             "levels": st.column_config.NumberColumn(
                 "levels", min_value=1, max_value=200, step=1, format="%.0f",
                 help="Number of above-ground building levels. Edit this when the OSM value is missing or incorrect.",
@@ -5495,7 +5633,11 @@ def run_building_heat_demand_page():
             "retrofit situation": st.column_config.SelectboxColumn(
                 "retrofit situation",
                 options=RETROFIT_SITUATION_OPTIONS,
-                help="Estimated from building type and construction year; edit if known.",
+                help=(
+                    "Estimated from building type and construction year only for "
+                    "heated buildings. It remains blank for garages and other "
+                    "building types without an estimated heat demand."
+                ),
             ),
             "building index": st.column_config.TextColumn("building index"),
             "address": st.column_config.TextColumn("address"),
@@ -5545,6 +5687,12 @@ def run_building_heat_demand_page():
             st.caption(status_note())
 
         if save_attributes_clicked:
+            zero_demand_mask = attrib_edited["building type"].map(
+                norm_btype
+            ).isin(ZERO_DEMAND_TYPES)
+            attrib_edited.loc[
+                zero_demand_mask, "retrofit situation"
+            ] = None
             osm_row_mask = ~attrib_edited["bidx"].astype(str).isin(manual_bidx_set)
             manual_content_mask = (
                 attrib_edited.get("name", pd.Series("", index=attrib_edited.index)).fillna("").astype(str).str.strip().ne("")
@@ -7051,10 +7199,10 @@ def run_building_heat_demand_page():
         st.markdown(
             """
             These assumptions translate the available building attributes into OpenDHW inputs:
-            - **Residential draw-off volume**: hot water volume per resident and day. Typical starting values are 25-30 L/person/day for low use, 40 L/person/day for a common default, and 50-60 L/person/day for higher use.
-            - **Residential occupancy area**: net floor area per resident. Typical starting values are 35-40 m²/person for dense occupancy, 45 m²/person as a moderate default, and 55-70 m²/person for lower occupancy.
+            - **Non-residential defaults**: building-type-specific net floor area per user and draw-off litres per user and day are used. The multiplier scales the draw-off volume directly.
+            - **Residential defaults**: draw-off volume and net floor area per resident are selected from the mapped OpenDHW type (`SFH`, `TH`, `MFH` or `AB`).
             - **Temperature rise**: temperature difference between cold water and delivered hot water. 30-35 K is common; 40-45 K is a conservative high-temperature assumption.
-            - **Profile timestep**: temporal resolution of the generated DHW profile. For this district planning tool, **1 hour is preferred** because the system simulation use hourly time steps. Use 30 or 15 minutes only when you intentionally want more detailed short-term DHW peaks for separate checks.
+            - **Profile timestep**: DHW profiles are generated at 1-hour resolution to match the system simulation time steps and keep generation time manageable.
             - **Drawoff categories**: OpenDHW event detail. `1` is simpler and faster; `4` separates event categories more finely.
             - **Random seed**: controls reproducibility of the stochastic draw-off events. The value entered here is only the base seed; the tool derives a different deterministic seed for each building from its building id, so buildings with the same assumptions do not receive identical DHW patterns or perfectly overlapping peaks. Keeping the same base seed makes a rerun reproducible; changing it creates a different but still plausible set of profiles.
             - **Holiday country code**: country used for holiday-sensitive profile generation. `DE` is the default for Germany.
@@ -7069,41 +7217,18 @@ def run_building_heat_demand_page():
 
         c1, c2, c3 = st.columns(3)
         with c1:
-            dhw_res_lppd = st.number_input(
-                "Residential draw-off volume (L/person/day)",
-                min_value=1.0,
-                max_value=300.0,
-                value=40.0,
-                step=1.0,
-                key="dhw_res_lppd",
-                help="Representative values: 25-30 low, 40 default, 50-60 high.",
-            )
             dhw_temp_delta = st.number_input(
                 "Temperature rise (K)",
                 min_value=1.0,
                 max_value=80.0,
-                value=35.0,
-                step=1.0,
-                key="dhw_temp_delta",
-                help="Representative values: 30-35 K common, 40-45 K conservative.",
-            )
-        with c2:
-            dhw_m2_per_person = st.number_input(
-                "Residential occupancy area (m²/person)",
-                min_value=5.0,
-                max_value=200.0,
                 value=45.0,
                 step=1.0,
-                key="dhw_m2_per_person",
-                help="Representative values: 35-40 dense, 45 default, 55-70 lower occupancy.",
+                key="dhw_temp_delta",
+                help="Default: 45 K between cold water and delivered hot water.",
             )
-            dhw_timestep_label = st.selectbox(
-                "Profile timestep",
-                ["1 hour", "30 minutes", "15 minutes"],
-                index=0,
-                key="dhw_timestep_label",
-                help="Preferred: 1 hour, because the district planning scenarios use hourly time series. Shorter steps are mainly for peak-detail checks.",
-            )
+        with c2:
+            st.markdown("Profile timestep: 1 hour")
+            st.caption("The hourly resolution matches the simulation time series.")
         with c3:
             dhw_categories = st.selectbox(
                 "Drawoff categories",
@@ -7125,21 +7250,21 @@ def run_building_heat_demand_page():
         c4, c5 = st.columns([1, 1])
         with c4:
             dhw_include_nonres = st.checkbox(
-                "Include rough non-residential defaults",
+                "Include non-residential defaults",
                 value=True,
                 key="dhw_include_nonres",
                 help="Enable this to estimate DHW for offices, schools, retail, hospitals and similar buildings from area-based user assumptions.",
             )
         with c5:
             dhw_nonres_multiplier = st.number_input(
-                "Non-residential volume multiplier",
+                "Non-residential DHW multiplier",
                 min_value=0.1,
                 max_value=10.0,
                 value=1.0,
                 step=0.1,
                 key="dhw_nonres_multiplier",
                 disabled=not dhw_include_nonres,
-                help="Scales the built-in non-residential L/user/day defaults. Use 0.5 for low use, 1.0 default, 1.5-2.0 high use.",
+                help="Scales the building-type-specific L/user/day defaults. At 1.0, the configured default volumes are used unchanged.",
             )
 
         dhw_country_code = st.text_input(
@@ -7153,7 +7278,7 @@ def run_building_heat_demand_page():
     if dhw_input_df.empty:
         st.info("Select at least one included building with area data to run OpenDHW.")
 
-    dhw_timestep_seconds = {"1 hour": 3600, "30 minutes": 1800, "15 minutes": 900}[dhw_timestep_label]
+    dhw_timestep_seconds = 3600
     if st.button(
             "Estimate DHW Demand with OpenDHW",
             key="estimate_dhw_opendhw",
@@ -7165,8 +7290,6 @@ def run_building_heat_demand_page():
                     buildings_df=dhw_input_df,
                     s_step=dhw_timestep_seconds,
                     categories=dhw_categories,
-                    residential_l_per_person_day=dhw_res_lppd,
-                    residential_m2_per_person=dhw_m2_per_person,
                     temp_delta=dhw_temp_delta,
                     include_nonres=dhw_include_nonres,
                     nonres_multiplier=dhw_nonres_multiplier,
@@ -7268,7 +7391,11 @@ def run_building_heat_demand_page():
     curr_project = ss.get("current_project")
     demand_results_fresh = not ss.get("results_stale", False) and not ss.get("dhw_results_stale", False)
     if curr_project and total_dhw_check is not None and demand_results_fresh:
-        demand_signature = f"{float(total_heat_demand):.6f}|{float(total_dhw_check):.6f}"
+        estimated_building_count = _current_estimated_building_count()
+        demand_signature = (
+            f"{float(total_heat_demand):.6f}|{float(total_dhw_check):.6f}|"
+            f"{estimated_building_count}"
+        )
         ignored_signature = ss.get("_scenario_demand_sync_ignored")
         scenario_mismatches = _scenario_demand_mismatches(
             curr_project,
@@ -7280,7 +7407,25 @@ def run_building_heat_demand_page():
             st.warning(
                 "The current demand differs from demand previously copied into these scenarios: "
                 f"**{scenario_names}**. Should those saved scenario values also be updated? "
-                "Previously simulated results will then be out of date until the project is submitted again."
+            )
+            update_building_count = st.checkbox(
+                (
+                    f"Also update the connected building count to {estimated_building_count}"
+                    if estimated_building_count is not None
+                    else "Also update the connected building count"
+                ),
+                value=estimated_building_count is not None,
+                disabled=estimated_building_count is None,
+                key="sync_scenario_building_count",
+                help="When cleared, each scenario keeps its currently stored building count.",
+            )
+            update_building_count = bool(
+                estimated_building_count is not None and update_building_count
+            )
+            st.caption(
+                "The connected building count includes only buildings whose final annual "
+                "space-heating demand is greater than 0 kWh/a. Buildings with zero or missing "
+                "demand are not counted."
             )
             sync_yes, sync_no = st.columns([1, 1])
             if sync_yes.button("Yes, update old scenarios", key="sync_scenario_demands_yes"):
@@ -7290,6 +7435,9 @@ def run_building_heat_demand_page():
                         total_heat_demand,
                         total_dhw_check,
                         ss.get("dhw_load_profile"),
+                        update_building_count=update_building_count,
+                        building_count=estimated_building_count,
+                        profile_updater=scenario_profile_updater,
                     )
                     ss.pop("_scenario_demand_sync_ignored", None)
                     st.success(f"Updated demand in {len(updated)} scenario(s). Submit again to refresh simulation results.")
@@ -7299,6 +7447,10 @@ def run_building_heat_demand_page():
             if sync_no.button("No, keep old scenario values", key="sync_scenario_demands_no"):
                 ss["_scenario_demand_sync_ignored"] = demand_signature
                 st.rerun()
+
+
+    # --- bottom save-all button ---
+    st.markdown("---")
 
     if st.session_state.get("_persist_dirty", False):
         st.warning(
@@ -7312,8 +7464,6 @@ def run_building_heat_demand_page():
     if save_warning_message:
         st.warning(save_warning_message)
 
-    # --- bottom save-all button ---
-    st.markdown("---")
 
     has_areas = bool(st.session_state.get("drawn_polygons"))
     has_estimates = (

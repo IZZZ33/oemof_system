@@ -4,13 +4,20 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
-from logic.project_paths import get_project_dir, get_project_results_dir
+from logic.project_paths import get_project_dir, get_project_results_dir, get_results_root
 
 
-_IGNORED_INPUT_FILES = {"input_done.flag", "simulation_status.json"}
+_IGNORED_INPUT_FILES = {
+    "input_done.flag",
+    "simulation_status.json",
+    # Durable download cache. The weather values that affect a simulation are
+    # already stored in each scenario workbook and are fingerprinted there.
+    "dwd_weather.json",
+}
 
 
 def project_input_fingerprint(project_name: str) -> str:
@@ -41,7 +48,21 @@ def read_run_status(project_name: str) -> dict:
     try:
         with path.open("r", encoding="utf-8") as stream:
             data = json.load(stream)
-        return data if isinstance(data, dict) else {}
+        if not isinstance(data, dict):
+            return {}
+        if data.get("state") == "running" and not _process_is_alive(data.get("runner_pid")):
+            write_run_status(
+                project_name,
+                "interrupted",
+                input_fingerprint=data.get("input_fingerprint"),
+                scenario=data.get("scenario"),
+                scenario_index=data.get("scenario_index"),
+                scenario_count=data.get("scenario_count"),
+                interrupted_from="running",
+                error="The previous simulation process stopped before completion.",
+            )
+            return read_run_status(project_name)
+        return data
     except (FileNotFoundError, json.JSONDecodeError, OSError):
         return {}
 
@@ -59,6 +80,114 @@ def write_run_status(project_name: str, state: str, **details) -> None:
     with temporary.open("w", encoding="utf-8") as stream:
         json.dump(payload, stream, ensure_ascii=False, indent=2)
     temporary.replace(path)
+
+
+def _process_is_alive(pid) -> bool:
+    try:
+        process_id = int(pid)
+        if process_id <= 0:
+            return False
+        if os.name == "nt":
+            # os.kill(pid, 0) can raise SystemError with some Windows Python
+            # builds. Query the process handle without sending any signal.
+            import ctypes
+
+            process_query_limited_information = 0x1000
+            still_active = 259
+            kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+            open_process = kernel32.OpenProcess
+            open_process.argtypes = [ctypes.c_uint32, ctypes.c_int, ctypes.c_uint32]
+            open_process.restype = ctypes.c_void_p
+            get_exit_code = kernel32.GetExitCodeProcess
+            get_exit_code.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint32)]
+            get_exit_code.restype = ctypes.c_int
+            close_handle = kernel32.CloseHandle
+            close_handle.argtypes = [ctypes.c_void_p]
+            close_handle.restype = ctypes.c_int
+
+            handle = open_process(
+                process_query_limited_information, False, process_id
+            )
+            if not handle:
+                # Access denied means that the process exists but cannot be
+                # inspected by this user. Other errors mean it no longer exists.
+                return ctypes.get_last_error() == 5
+            try:
+                exit_code = ctypes.c_uint32()
+                return bool(get_exit_code(handle, ctypes.byref(exit_code))) and (
+                    exit_code.value == still_active
+                )
+            finally:
+                close_handle(handle)
+
+        os.kill(process_id, 0)
+        return True
+    except (TypeError, ValueError, OSError, PermissionError, SystemError):
+        return False
+
+
+def recover_interrupted_run_statuses(
+    pending_projects=(), results_root: str | Path | None = None
+) -> list[str]:
+    """Convert orphaned queued/running states into recoverable interruptions.
+
+    This is called once when the simulation runner starts. A queued project is
+    retained only when its global submission flag still exists. A running state
+    is retained only when the recorded runner process is still alive.
+    """
+    pending = {str(project) for project in (pending_projects or ()) if project}
+    root = Path(results_root) if results_root is not None else Path(get_results_root())
+    recovered = []
+    if not root.exists():
+        return recovered
+
+    for status_path in root.glob("*/simulation_status.json"):
+        try:
+            with status_path.open("r", encoding="utf-8") as stream:
+                status = json.load(stream)
+        except (OSError, json.JSONDecodeError):
+            continue
+        if not isinstance(status, dict):
+            continue
+
+        project_name = str(status.get("project_name") or status_path.parent.name)
+        state = status.get("state")
+        if state == "queued" and project_name in pending:
+            continue
+        if state == "running" and _process_is_alive(status.get("runner_pid")):
+            continue
+        if state not in {"queued", "running"}:
+            continue
+
+        write_root = run_status_path(project_name)
+        if results_root is not None:
+            write_root = root / project_name / "simulation_status.json"
+            write_root.parent.mkdir(parents=True, exist_ok=True)
+            payload = {
+                **status,
+                "project_name": project_name,
+                "state": "interrupted",
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "interrupted_from": state,
+                "error": "The previous simulation process stopped before completion.",
+            }
+            temporary = write_root.with_suffix(".tmp")
+            with temporary.open("w", encoding="utf-8") as stream:
+                json.dump(payload, stream, ensure_ascii=False, indent=2)
+            temporary.replace(write_root)
+        else:
+            write_run_status(
+                project_name,
+                "interrupted",
+                input_fingerprint=status.get("input_fingerprint"),
+                scenario=status.get("scenario"),
+                scenario_index=status.get("scenario_index"),
+                scenario_count=status.get("scenario_count"),
+                interrupted_from=state,
+                error="The previous simulation process stopped before completion.",
+            )
+        recovered.append(project_name)
+    return recovered
 
 
 def results_match_current_inputs(project_name: str, status: dict | None = None) -> bool:

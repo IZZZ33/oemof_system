@@ -1,5 +1,6 @@
 import os
 from logic.utilities import create_folder
+from logic.project_paths import get_project_results_dir
 from logic import pre
 from logic import sim
 from logic import post
@@ -39,7 +40,7 @@ class OEMOFSim(object):
         if p_results is not None:
             self.p_results = os.path.abspath(p_results)
         else:
-            self.p_results = os.path.abspath(os.path.join('results', self.project_name))
+            self.p_results = get_project_results_dir(self.project_name)
 
         if not start_date:
             raise NameError("No start date for optimization specified")
@@ -82,9 +83,17 @@ class OEMOFSim(object):
         # create result folder for project
         create_folder(self.p_results)
 
-        self._pre_processing()
-        self._simulate_model()
-        self._post_processing()
+        try:
+            self._pre_processing()
+            self._simulate_model()
+            self._post_processing()
+        finally:
+            # Pre keeps a pandas ExcelFile open because custom constraints use
+            # it during model construction. Always release it after this run,
+            # including solver and post-processing failures. Otherwise the last
+            # simulated scenario remains locked on Windows.
+            if self.oemof_pre is not None:
+                self.oemof_pre.close()
 
     def _pre_processing(self):
         """oemof preprocessing, reads Excel file and creates oemof energy system"""

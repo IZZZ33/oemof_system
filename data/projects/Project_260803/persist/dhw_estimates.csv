@@ -1,0 +1,6 @@
+bidx,building index,building type,area_m2,levels,net_floor_area_m2,opendhw_type,estimated_occupants,water_l_per_person_day,mean_drawoff_l_per_day,annual_dhw_demand_kWh,basis,status
+0,Building_0,university,9524.02577109003,2,10476.428348199033,UNI,873.0356956832528,5.0,4365.178478416264,81585.02891000001,"12 m²/user, 5 L/user/day",estimated
+1,Building_1,university,4911.984192758077,10,27015.913060169427,UNI,2251.3260883474522,5.0,11256.630441737261,210384.90819499997,"12 m²/user, 5 L/user/day",estimated
+2,Building_2,university,7861.623604082897,2,8647.785964491188,UNI,720.6488303742657,5.0,3603.2441518713285,67344.20154,"12 m²/user, 5 L/user/day",estimated
+3,Building_3,university,18100.0,8,79640.0,UNI,6636.666666666667,5.0,33183.333333333336,617803.99373,"12 m²/user, 5 L/user/day",estimated
+6,Building_6,university,4640.807288843641,2,5104.888017728005,UNI,425.4073348106671,5.0,2127.0366740533354,39754.33308,"12 m²/user, 5 L/user/day",estimated
