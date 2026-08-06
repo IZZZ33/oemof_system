@@ -4,19 +4,16 @@ This guide supplements the detailed Windows guide. The application uses the
 same Conda environment and Python launcher on all supported desktop operating
 systems.
 
-## Current portability status
+## Supported systems
 
-The code is designed for:
+The application supports:
 
 - Windows 64-bit;
 - macOS on Intel or Apple Silicon; and
-- Linux on x86-64, including headless systems.
+- Linux on x86-64.
 
-The application uses platform-independent project paths, a non-interactive
-Matplotlib backend, the current Conda environment's Python interpreter, and the
-Python-native Gurobi interface when available. Windows remains the most tested
-platform, so first installations on macOS and Linux should run the checks below
-before starting a real project.
+Windows remains the most tested platform. Complete the checks below before
+starting a real project on macOS or Linux.
 
 ## 1 — Install Conda
 
@@ -37,27 +34,11 @@ conda --version
 If `conda` is installed but not available in a new shell, follow the installer
 instructions for `conda init`, then restart Terminal.
 
-## 2 — Install and license Gurobi
+## 2 — Obtain a Gurobi licence
 
 Create or sign in to a Gurobi account and obtain the appropriate academic or
-commercial licence. You may install the full Gurobi package for the same
-operating system and processor architecture now, or use the recommended Conda
-package in Section 4.
-
-Gurobi has three parts: the optimizer/`gurobi_cl` command, the `gurobipy`
-Python interface, and a valid licence. The application needs the Python
-interface or command-line optimizer, plus a suitable licence. Section 4 gives
-two installation methods; use only one method inside the environment.
-
-For a named-user licence, Gurobi normally supplies a private command similar to:
-
-```bash
-grbgetkey YOUR-LICENCE-KEY
-```
-
-Run the exact command supplied by Gurobi. Do not share the key or licence file.
-WLS and licence-server users should follow the different configuration supplied
-by their licence administrator.
+commercial licence. The software and licence are installed after the project
+environment has been created in Section 4.
 
 ## 3 — Download and extract the application
 
@@ -100,29 +81,33 @@ python -m pip check
 
 Python should report version 3.10.
 
-Choose one Gurobi installation method while the environment is active.
-
-### Method A — Gurobi Conda package (recommended)
-
-This installs `gurobipy`, `gurobi_cl`, and the licence tools together:
+While the environment is active, install the tested Gurobi package. It includes
+`gurobipy`, `gurobi_cl`, and the licence tools:
 
 ```bash
 conda install -c gurobi gurobi=12.0.1
 ```
 
-### Method B — Existing full Gurobi installation plus Python interface
+Version 12.0.1 is tested with this project. Users of an organization-managed
+Gurobi installation should follow their administrator's instructions instead.
 
-If the full optimizer is already installed system-wide, install its tested
-Python interface in the active environment:
+For a named-user licence, run the private `grbgetkey` command supplied in the
+Gurobi User Portal and accept the usual licence location:
 
-```bash
-python -m pip install gurobipy==12.0.1
+```text
+/Users/YOUR_NAME/gurobi.lic       # macOS
+/home/YOUR_NAME/gurobi.lic        # Linux
 ```
 
-Version 12.0.1 is the version tested with this project. Do not run the pip
-command after Method A. If the licence has not yet been retrieved, run the
-private `grbgetkey` command from your Gurobi account now. WLS and licence-server
-users should use their administrator's configuration instead.
+Define the standard licence path in the Terminal that will start the program:
+
+```bash
+export GRB_LICENSE_FILE="$HOME/gurobi.lic"
+```
+
+Do not put `gurobi.lic` inside the Conda environment, and do not share the file
+or private key. WLS and licence-server users should use the configuration
+provided by their administrator instead.
 
 Test the package and licence:
 
@@ -131,52 +116,17 @@ python -c "import pyomo, gurobipy as gp; print('Pyomo:', pyomo.__version__); pri
 python -c "import gurobipy as gp; env=gp.Env(); print('Gurobi licence is working'); env.dispose()"
 ```
 
-The tested combination reports Pyomo 6.8.2 and Gurobi 12.0.1.
-
-When `gurobi_cl` is installed, also check:
+The tested combination reports Pyomo 6.8.2 and Gurobi 12.0.1. Check the
+licence selected by Gurobi:
 
 ```bash
 gurobi_cl --license
 ```
 
-Check what the active environment can find:
-
-```bash
-which python
-command -v gurobi_cl
-python -c "import gurobipy; print(gurobipy.__file__)"
-find "$CONDA_PREFIX" "$HOME" -name gurobi.lic -type f 2>/dev/null
-```
-
-If the last command reports a licence inside the environment, export its exact
-path before starting the application. For example:
-
-```bash
-export GRB_LICENSE_FILE="$CONDA_PREFIX/lib/gurobi.lic"
-```
-
-If the Python interface is unavailable but `gurobi_cl` works, explicitly expose
-the command-line solver:
-
-```bash
-export OEMOF_GUROBI_PATH="$(command -v gurobi_cl)"
-```
-
-Run these commands in the same Terminal that starts `python oemof-hri.py`.
-Environment variables exported after the application has started are not passed
-to the running process, so stop and restart it after changing them.
-
-To persist a local licence path only for this Conda environment:
-
-```bash
-conda env config vars set GRB_LICENSE_FILE="$CONDA_PREFIX/lib/gurobi.lic"
-conda deactivate
-conda activate oemof-system
-```
-
-Replace the example path with the path returned by `find`. Users of a licence
-server or Web License Service should keep the configuration supplied by their
-licence administrator instead of exporting a local file.
+It should report an academic or commercial licence. `Restricted license` means
+Gurobi is using its size-limited fallback rather than the full licence. If the
+licence is intentionally stored outside the home directory, replace the path in
+`GRB_LICENSE_FILE` with its actual location.
 
 ## 5 — Start the complete application
 
@@ -221,23 +171,15 @@ Useful path symbols:
 
 Pressing **Tab** while typing a folder name can complete it automatically.
 
-The platform-independent command is:
+Start the program with:
 
 ```bash
+export GRB_LICENSE_FILE="$HOME/gurobi.lic"
 python oemof-hri.py
 ```
 
-The repository also includes a shell launcher:
-
-```bash
-bash start.sh
-```
-
-Both commands start the Streamlit interface and the background optimization
-runner. Keep Terminal open while using the application. Stop it with `Ctrl+C`.
-
-The existing `streamlit.sh` script is UI-only and does not start the background
-optimization runner.
+This starts the interface and background optimization runner. Keep Terminal
+open while using the application. Stop it with `Ctrl+C`.
 
 ## Starting the program on later days
 
@@ -247,24 +189,11 @@ run:
 ```bash
 cd ~/path/to/oemof_system
 conda activate oemof-system
+export GRB_LICENSE_FILE="$HOME/gurobi.lic"
 python oemof-hri.py
 ```
 
 Replace the example repository path with its actual location.
-
-## Headless Linux servers
-
-The calculation and file-generation code can run without a graphical desktop.
-The Matplotlib backend defaults to `Agg`, so Tk is not required.
-
-For remote browser access, server administrators must configure Streamlit's
-listening address, firewall, authentication, and any reverse proxy according to
-their security requirements. Do not expose an unprotected Streamlit service
-directly to the public internet.
-
-For a local SSH tunnel, an administrator can keep Streamlit bound to localhost
-and forward its port securely. The exact command depends on the server and
-organization.
 
 ## Apple Silicon notes
 
@@ -299,8 +228,7 @@ The path should point into an environment named `oemof-system`.
 Check the licence using the Gurobi command supplied for your licence type. A
 named-user licence is commonly stored at `~/gurobi.lic`. For another location,
 follow Gurobi's instructions for the `GRB_LICENSE_FILE` environment variable.
-The discovery and `export` commands in Section 4 show how to select a licence
-stored inside the active Conda environment.
+The `export` command in Section 4 shows how to select the usual licence file.
 
 ### Gurobi cannot be found
 
@@ -312,14 +240,19 @@ command -v gurobi_cl
 python -c "import gurobipy; print(gurobipy.__file__)"
 ```
 
-If neither command succeeds, install Gurobi using one method from Section 4. If
-`gurobi_cl` works but the application does not find it, set
-`OEMOF_GUROBI_PATH` as shown in Section 4 and restart the application from that
-same Terminal.
+If neither command succeeds, reinstall Gurobi with the Conda command from
+Section 4. If `gurobi_cl` works, restart the application from that same Terminal.
 
-If Gurobi reports `Model too large for size-limited license`, the software is
-installed but the active licence is insufficient for the project. Activate the
-intended academic or commercial licence.
+If Gurobi reports `Model too large for size-limited license`, it selected a
+size-limited fallback instead of the intended licence. Run:
+
+```bash
+export GRB_LICENSE_FILE="$HOME/gurobi.lic"
+gurobi_cl --license
+```
+
+The result must show the academic or commercial licence, not `Restricted
+license`. Then restart the application from the same Terminal.
 
 If a simulation reports `addConstr() got an unexpected keyword argument
 'sense'`, Gurobi 12 is being used with an old Pyomo release. Update the active
@@ -348,17 +281,11 @@ conda env update --name oemof-system --file environment.yml --prune
 python -m pip check
 ```
 
-Then refresh Gurobi using the same method originally selected in Section 4:
+Then refresh Gurobi:
 
 ```bash
-# Conda method
 conda install -c gurobi gurobi=12.0.1
-
-# OR: full system installation plus Python interface
-python -m pip install gurobipy==12.0.1
 ```
-
-Run only the command for the chosen method.
 
 ## Quick installation checklist
 
@@ -367,7 +294,7 @@ Run only the command for the chosen method.
 - [ ] Terminal is open in the folder containing `environment.yml`.
 - [ ] `conda env create --file environment.yml` completed.
 - [ ] `conda activate oemof-system` completed.
-- [ ] Gurobi was installed using one method from Section 4.
+- [ ] Gurobi 12.0.1 was installed in the active environment.
 - [ ] A suitable Gurobi licence is active and the Python licence test passed.
 - [ ] The application was started with `python oemof-hri.py`.
 

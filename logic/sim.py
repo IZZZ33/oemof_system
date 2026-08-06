@@ -10,6 +10,7 @@ import re
 from pathlib import Path
 import shutil
 import sys
+import time
 import logic.custom_constraints as custom_constraints
 from oemof.network.graph import create_nx_graph
 
@@ -36,52 +37,6 @@ def _gurobi_environment_roots() -> list[Path]:
     return roots
 
 
-def _configure_gurobi_license(executable: str | Path | None = None) -> str | None:
-    """Use an explicit licence, or discover a licence near Python/Gurobi."""
-    configured = os.environ.get("GRB_LICENSE_FILE")
-    if configured:
-        # Never override licence-server, WLS, or explicitly selected settings.
-        return configured
-
-    candidates = []
-    for root in _gurobi_environment_roots():
-        candidates.extend(
-            [
-                root / "gurobi.lic",
-                root / "lib" / "gurobi.lic",
-                root / "Library" / "gurobi.lic",
-                root / "Library" / "bin" / "gurobi.lic",
-                root / "share" / "gurobi" / "gurobi.lic",
-            ]
-        )
-
-    gurobi_home = os.environ.get("GUROBI_HOME")
-    if gurobi_home:
-        home = Path(os.path.expandvars(gurobi_home)).expanduser()
-        candidates.extend([home / "gurobi.lic", home.parent / "gurobi.lic"])
-
-    if executable:
-        executable_path = Path(executable).expanduser()
-        candidates.extend(
-            parent / "gurobi.lic"
-            for parent in list(executable_path.parents)[:4]
-        )
-
-    candidates.append(Path.home() / "gurobi.lic")
-    if os.name == "nt":
-        candidates.append(Path("C:/gurobi/gurobi.lic"))
-    elif sys.platform == "darwin":
-        candidates.append(Path("/Library/gurobi/gurobi.lic"))
-    else:
-        candidates.append(Path("/opt/gurobi/gurobi.lic"))
-
-    for candidate in candidates:
-        if candidate.is_file():
-            os.environ["GRB_LICENSE_FILE"] = str(candidate)
-            return str(candidate)
-    return None
-
-
 def _ensure_gurobi_available() -> str:
     """Locate gurobi_cl for Pyomo's command-line solver interface."""
     launcher_names = (
@@ -92,7 +47,6 @@ def _ensure_gurobi_available() -> str:
     for launcher_name in launcher_names:
         configured = shutil.which(launcher_name)
         if configured:
-            _configure_gurobi_license(configured)
             return configured
 
     candidates: list[Path] = []
@@ -189,7 +143,6 @@ def _ensure_gurobi_available() -> str:
         os.environ["PATH"] = str(candidate.parent) + os.pathsep + os.environ.get(
             "PATH", ""
         )
-        _configure_gurobi_license(candidate)
         return str(candidate)
 
     raise RuntimeError(
@@ -203,7 +156,6 @@ def _ensure_gurobi_available() -> str:
 
 def _gurobi_solver_configuration() -> tuple[str, str | None, str]:
     """Choose a Python-native solver first, then the external launcher."""
-    _configure_gurobi_license()
     incompatible_direct_reason = None
     try:
         from pyomo.environ import SolverFactory
@@ -431,6 +383,7 @@ class Sim(object):
             }
             if solver_io is not None:
                 solver_arguments["solver_io"] = solver_io
+            solve_started_at = time.perf_counter()
             try:
                 self.oemof_model.solve(**solver_arguments)
             except Exception as exc:
@@ -446,12 +399,16 @@ class Sim(object):
                         "The model is too large for the currently available RAM."
                     ) from exc
                 raise
+            solve_elapsed_seconds = time.perf_counter() - solve_started_at
             # self.oemof_model.solve(solver='gurobi', threads=8, solve_kwargs={'tee': False})
             self.oemof_solph_results = solph.processing.results(self.oemof_model)
             self.oemof_solph_meta_results = solph.processing.meta_results(self.oemof_model)
             print("*********************************************************")
             logging.info('Finished solving case : {}\n'.format(self.oemof_pre.project_name))
-            logging.info('Total simulation time : {} s\n'.format(self.oemof_solph_meta_results['solver']['Time']))
+            logging.info(
+                "Total simulation time : %.2f s\n",
+                solve_elapsed_seconds,
+            )
         else:
             # skipping simulation and use existing result file
             if not os.path.isfile(self.p_result_sim):

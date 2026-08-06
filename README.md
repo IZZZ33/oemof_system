@@ -48,17 +48,29 @@ conda activate YOUR_ENVIRONMENT_NAME
 python -m pip check
 ```
 
-As an alternative to Conda, install Python 3.10, create and activate a virtual
-environment, and install the pinned packages with:
-
-```text
-python -m pip install -r requirements.txt
-```
-
 ### Install Gurobi and start the tool
 
-1. With the environment active, install the tested Gurobi Conda package using `conda install -c gurobi gurobi=12.0.1`. Alternatively, users with a full system installation can install only its Python interface using `python -m pip install gurobipy==12.0.1`. Do not use both methods in the same environment. Activate a valid Gurobi licence according to its licence type. Gurobi is not installed by `environment.yml` because its installation and licence are managed separately. The application first uses the Python-native `gurobi_direct` interface when `gurobipy` is installed. Otherwise, it detects `gurobi_cl` through `PATH`, `GUROBI_HOME`, standard installation folders, and the active Conda environment. For an unusual installation, set `OEMOF_GUROBI_PATH` to the Gurobi `bin` directory or directly to `gurobi_cl`.
-2. Start the tool from the repository:
+1. With the environment active, install the tested Gurobi package:
+
+   ```text
+   conda install -c gurobi gurobi=12.0.1
+   ```
+
+2. Obtain the appropriate licence from the Gurobi User Portal. For a named-user
+   licence, run its private `grbgetkey` command and save `gurobi.lic` in the
+   normal user home directory—not inside the Conda environment.
+
+3. In the command window that starts the program, define the licence path:
+
+   ```text
+   Windows:      set "GRB_LICENSE_FILE=%USERPROFILE%\gurobi.lic"
+   macOS/Linux:  export GRB_LICENSE_FILE="$HOME/gurobi.lic"
+   ```
+
+4. Confirm that `gurobi_cl --license` reports the intended academic or
+   commercial licence, not `Restricted license`.
+
+5. Start the tool from the repository:
 
    ```text
    python oemof-hri.py
@@ -75,26 +87,9 @@ python -c "import sys; print(sys.executable)"
 python oemof-hri.py
 ```
 
-For a licence stored inside the environment, set its exact location before
-starting the application. For example, on macOS/Linux:
-
-```text
-find "$CONDA_PREFIX" -name gurobi.lic -type f
-export GRB_LICENSE_FILE="$CONDA_PREFIX/lib/gurobi.lic"
-```
-
-On Windows Anaconda Prompt, use `where /r "%CONDA_PREFIX%" gurobi.lic` and
-`set "GRB_LICENSE_FILE=C:\full\path\to\gurobi.lic"`. The application also
-recognizes `gurobi_cl` on `PATH`, `GUROBI_HOME`, and `OEMOF_GUROBI_PATH`.
-
 The repository itself may also be stored under any folder name or location.
 Application data, templates, and results are resolved relative to the downloaded
 repository rather than the terminal's current working directory.
-
-When using PyCharm, select that environment as the project interpreter and set
-the run configuration to use the project interpreter. Do not enter an absolute
-Python path in a shared run configuration. Files under `.idea/` are intentionally
-not shared because interpreter registrations are specific to each computer.
 
 ## Plan and compare heating solutions
 
