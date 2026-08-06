@@ -1,13 +1,11 @@
 import os
+os.environ.setdefault("MPLBACKEND", "Agg")
 import logging
 
 import oemof.solph as solph
-import matplotlib as mpl
 import matplotlib.pyplot as plt
 from logic.utilities import create_folder
 import pandas as pd
-
-mpl.use('TkAgg') # workaround for backend error when plotting (maybe Windows-specific (?))
 
 
 class Post(object):

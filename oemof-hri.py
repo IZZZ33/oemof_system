@@ -9,6 +9,7 @@ from datetime import datetime
 import shutil
 import glob
 import json
+import atexit
 from logic.utilities import create_folder
 
 from logic.project_paths import (
@@ -25,6 +26,18 @@ from logic.project_run_state import (
 )
 
 APP_ROOT = Path(__file__).resolve().parent
+
+
+def stop_child_process(process, timeout_seconds: float = 5.0) -> None:
+    """Stop a child process cleanly on Windows, macOS, and Linux."""
+    if process is None or process.poll() is not None:
+        return
+    process.terminate()
+    try:
+        process.wait(timeout=max(float(timeout_seconds), 0.1))
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait(timeout=max(float(timeout_seconds), 0.1))
 
 def list_scenarios_for_project(project_name: str):
     scen_dir = get_scenario_dir_for_project(project_name)
@@ -79,6 +92,7 @@ if __name__ == '__main__':
         "run",
         str(APP_ROOT / "logic" / "data_input.py"),
     ], shell=False, cwd=str(APP_ROOT))
+    atexit.register(stop_child_process, p_input)
 
     print("Waiting for project submissions. The input webpage remains available during simulations.")
 

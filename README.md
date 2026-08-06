@@ -16,6 +16,8 @@ The tool works best for locations in Germany and needs an internet connection to
 For a complete beginner-friendly Windows setup—including Anaconda, Gurobi,
 licence activation, downloading the code, creating the Conda environment, and
 starting the application—see [INSTALLATION_GUIDE.md](INSTALLATION_GUIDE.md).
+For macOS and Linux, see
+[INSTALLATION_GUIDE_MACOS_LINUX.md](INSTALLATION_GUIDE_MACOS_LINUX.md).
 
 A technical administrator must install the required software once. Using Conda
 with `environment.yml` is recommended because it installs the tested Python

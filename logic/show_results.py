@@ -1,7 +1,8 @@
+import os
+os.environ.setdefault("MPLBACKEND", "Agg")
 import streamlit as st
 import pandas as pd
 import sys
-import os
 import matplotlib.pyplot as plt
 import plotly.subplots as sp
 import plotly.express as px

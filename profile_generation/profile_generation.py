@@ -5,6 +5,7 @@ For other years new weather data must be placed in data folder and the holidays 
 """
 
 import os
+os.environ.setdefault("MPLBACKEND", "Agg")
 import warnings
 import pandas as pd
 from logic.utilities import create_folder

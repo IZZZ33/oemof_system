@@ -1,4 +1,5 @@
 import os
+os.environ.setdefault("MPLBACKEND", "Agg")
 import oemof.solph as solph
 import oemof.solph.constraints as constraints
 import networkx as nx
@@ -14,44 +15,62 @@ from oemof.network.graph import create_nx_graph
 
 def _ensure_gurobi_available() -> str:
     """Locate the Gurobi launcher required by Pyomo's shell interface."""
-    launcher_name = "gurobi.bat" if os.name == "nt" else "gurobi"
-    configured = shutil.which("gurobi")
-    if configured:
-        return configured
+    launcher_names = (
+        ("gurobi.bat",)
+        if os.name == "nt"
+        else ("gurobi.sh",)
+    )
+    for launcher_name in launcher_names:
+        configured = shutil.which(launcher_name)
+        if configured:
+            return configured
 
     candidates = []
     explicit_path = os.environ.get("OEMOF_GUROBI_PATH")
     if explicit_path:
         explicit = Path(explicit_path).expanduser()
-        candidates.append(
-            explicit / launcher_name if explicit.is_dir() else explicit
+        candidates.extend(
+            [explicit / name for name in launcher_names]
+            if explicit.is_dir() else [explicit]
         )
 
     gurobi_home = os.environ.get("GUROBI_HOME")
     if gurobi_home:
         home = Path(gurobi_home).expanduser()
-        candidates.extend(
-            [
-                home / "bin" / launcher_name,
-                home / "win64" / "bin" / launcher_name,
-            ]
-        )
+        for launcher_name in launcher_names:
+            candidates.extend(
+                [
+                    home / "bin" / launcher_name,
+                    home / "win64" / "bin" / launcher_name,
+                ]
+            )
 
     if os.name == "nt":
-        candidates.append(Path("C:/gurobi/win64/bin") / launcher_name)
-        for root in (Path("C:/"), Path(os.environ.get("ProgramFiles", "C:/Program Files"))):
-            try:
-                candidates.extend(
-                    sorted(root.glob(f"gurobi*/win64/bin/{launcher_name}"), reverse=True)
-                )
-            except OSError:
-                pass
+        for launcher_name in launcher_names:
+            candidates.append(Path("C:/gurobi/win64/bin") / launcher_name)
+            for root in (
+                Path("C:/"),
+                Path(os.environ.get("ProgramFiles", "C:/Program Files")),
+            ):
+                try:
+                    candidates.extend(
+                        sorted(
+                            root.glob(
+                                f"gurobi*/win64/bin/{launcher_name}"
+                            ),
+                            reverse=True,
+                        )
+                    )
+                except OSError:
+                    pass
 
         # Conda may install the command-line solver in its base directory while
         # the application runs from a separate named environment.
         conda_prefix = Path(os.environ.get("CONDA_PREFIX", sys.prefix))
         if conda_prefix.parent.name.lower() == "envs":
-            candidates.append(conda_prefix.parent.parent / launcher_name)
+            candidates.extend(
+                conda_prefix.parent.parent / name for name in launcher_names
+            )
 
     seen = set()
     for candidate in candidates:

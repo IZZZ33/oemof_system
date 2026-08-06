@@ -3,6 +3,9 @@
 This guide explains how to install and start the District Planning Tool on a
 Windows computer. It is written for users without programming experience.
 
+Users of other operating systems should follow
+[INSTALLATION_GUIDE_MACOS_LINUX.md](INSTALLATION_GUIDE_MACOS_LINUX.md).
+
 ## What will be installed
 
 You need four things:
@@ -398,4 +401,3 @@ Another copy may already be running. Find its Anaconda Prompt and stop it with
 - [Gurobi academic licences](https://www.gurobi.com/academics)
 - [Installing Gurobi for Python](https://support.gurobi.com/hc/en-us/articles/360044290292-How-do-I-install-Gurobi-for-Python)
 - [Streamlit run command](https://docs.streamlit.io/develop/api-reference/cli/run)
-
