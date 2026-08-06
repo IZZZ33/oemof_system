@@ -10704,14 +10704,16 @@ def run_project_management_page():
 
 def run_results_page():
     st.title("Simulation Results")
-    projects = list_projects()
+    projects = sorted(list_projects(), key=natural_sort_key)
     if not projects:
         st.info("No projects are available yet.")
         return
 
     preferred = st.session_state.get("results_project") or get_current_project()
-    index = projects.index(preferred) if preferred in projects else 0
-    project = st.selectbox("Project", projects, index=index, key="results_project_selector")
+    selector_key = "results_project_selector"
+    if st.session_state.get(selector_key) not in projects:
+        st.session_state[selector_key] = preferred if preferred in projects else projects[0]
+    project = st.selectbox("Project", projects, key=selector_key)
     st.session_state["results_project"] = project
 
     results_dir = Path(get_project_results_dir(project))
