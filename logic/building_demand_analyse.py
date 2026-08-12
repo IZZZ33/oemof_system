@@ -1248,19 +1248,14 @@ def _rehydrate_project_state(loaded):
     # -----------------------------------------
     # 4. Demand estimates
     # -----------------------------------------
-    def _std(df):
-        if df is None or getattr(df, "empty", True):
-            return pd.DataFrame(columns=["input_index","heat_demand_kWh"])
-        d = df.copy()
-        if "bidx" in d.columns and "input_index" not in d.columns:
-            d = d.rename(columns={"bidx":"input_index"})
-        if "input_index" not in d.columns or "heat_demand_kWh" not in d.columns:
-            return pd.DataFrame(columns=["input_index","heat_demand_kWh"])
-        d["input_index"] = d["input_index"].astype(str)
-        return d[["input_index","heat_demand_kWh"]]
-
-    ss["building_demand_estimates"] = _std(loaded.get("estimates_df_final"))
-    ss["building_demand_estimates_original"] = _std(loaded.get("estimates_df_original"))
+    # Preserve the complete result schema when reopening a project. The old
+    # rehydration helper discarded the saved peak-load and method columns.
+    ss["building_demand_estimates"] = _std_estimates_df(
+        loaded.get("estimates_df_final")
+    )
+    ss["building_demand_estimates_original"] = _std_estimates_df(
+        loaded.get("estimates_df_original")
+    )
 
     # totals
     tot = loaded.get("total_heat_demand_kwh")
@@ -1273,10 +1268,20 @@ def _rehydrate_project_state(loaded):
 
     dhw_est = _std_dhw_estimates_df(loaded.get("dhw_estimates_df"))
     dhw_profile = _std_dhw_profile_df(loaded.get("dhw_profile_df"))
+    excluded_dhw_ids = set(dhw_est["bidx"].astype(str)) & ss["excluded_bidx"]
+    if excluded_dhw_ids:
+        # Older project files may contain a DHW aggregate calculated before
+        # the current exclusions were applied. The per-building rows can be
+        # identified, but the aggregate hourly profile cannot be corrected
+        # safely, so invalidate both together.
+        dhw_est = pd.DataFrame(columns=DHW_ESTIMATE_COLUMNS)
+        dhw_profile = pd.DataFrame(columns=DHW_PROFILE_COLUMNS)
     ss["dhw_demand_estimates"] = dhw_est
     ss["dhw_load_profile"] = dhw_profile
 
-    total_dhw = loaded.get("total_dhw_demand_kwh")
+    total_dhw = (
+        None if excluded_dhw_ids else loaded.get("total_dhw_demand_kwh")
+    )
     if total_dhw is None and not dhw_est.empty:
         total_dhw = float(
             pd.to_numeric(dhw_est["annual_dhw_demand_kWh"], errors="coerce").fillna(0).sum()
@@ -4631,8 +4636,13 @@ def run_building_heat_demand_page(scenario_profile_updater=None):
                 st.session_state["_persist_dirty"] = True
                 st.session_state["results_stale"] = True
                 st.session_state.pop("total_heat_demand", None)
-                if st.session_state.get("show_dhw_results"):
-                    st.session_state["dhw_results_stale"] = True
+                # DHW profiles are stored as one aggregate, so a changed
+                # building set requires a fresh OpenDHW run.
+                st.session_state.pop("dhw_demand_estimates", None)
+                st.session_state.pop("dhw_load_profile", None)
+                st.session_state.pop("total_dhw_demand", None)
+                st.session_state["show_dhw_results"] = False
+                st.session_state["dhw_results_stale"] = False
                 # st.session_state.pop("building_demand_estimates", None)
                 st.rerun()
         except Exception:
@@ -4660,8 +4670,12 @@ def run_building_heat_demand_page(scenario_profile_updater=None):
             st.session_state["_persist_dirty"] = True
             st.session_state["results_stale"] = True
             st.session_state.pop("total_heat_demand", None)
-            if st.session_state.get("show_dhw_results"):
-                st.session_state["dhw_results_stale"] = True
+            # Re-including buildings also changes the DHW input set.
+            st.session_state.pop("dhw_demand_estimates", None)
+            st.session_state.pop("dhw_load_profile", None)
+            st.session_state.pop("total_dhw_demand", None)
+            st.session_state["show_dhw_results"] = False
+            st.session_state["dhw_results_stale"] = False
             # st.session_state.pop("building_demand_estimates", None)
             # st.session_state.pop("info_overridden", None)
             st.rerun()

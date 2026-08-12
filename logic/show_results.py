@@ -1566,6 +1566,45 @@ class MultiScenarioViewer:
                     ):
                         continue
                     source, target = map(str, column[0])
+                    storage_component = None
+                    storage_direction = None
+                    storage_sign = 1.0
+                    if target == bus and "storage_th" in source.lower():
+                        storage_component = source
+                        storage_direction = "discharging"
+                    elif source == bus and "storage_th" in target.lower():
+                        storage_component = target
+                        storage_direction = "charging"
+                        # Charging consumes heat from the plotted bus, so show
+                        # it below zero in the hourly heat-dispatch chart.
+                        storage_sign = -1.0
+
+                    if storage_component is not None:
+                        if component_scope(storage_component) != expected_scope:
+                            continue
+                        display_scope = (
+                            "decentral"
+                            if expected_scope == "decentralized"
+                            else expected_scope
+                        )
+                        label = (
+                            f"Thermal storage {storage_direction} - "
+                            f"{display_scope}"
+                        )
+                        series = (
+                            pd.to_numeric(frame[column], errors="coerce")
+                            .fillna(0).reset_index(drop=True) / 1000
+                        ) * storage_sign
+                        if series.abs().max() <= 1e-9:
+                            continue
+                        if label in generation:
+                            generation[label] = generation[label].add(
+                                series, fill_value=0
+                            )
+                        else:
+                            generation[label] = series
+                        continue
+
                     if target != bus or component_scope(source) != expected_scope:
                         continue
                     technology = next(
@@ -1629,39 +1668,81 @@ class MultiScenarioViewer:
                 ),
             )
 
-            figure = go.Figure()
-            for technology, series in sorted(flows.items()):
-                figure.add_trace(go.Scatter(
-                    x=list(range(1, len(series) + 1)),
-                    y=series,
-                    mode="lines",
-                    name=technology,
-                    line=dict(color=result_technology_color(technology)),
-                ))
-            figure.update_layout(
-                height=chart_height,
-                width=total_width,
-                autosize=False,
-                title_text=f"{title} in Scenario {scenario}",
-                title_x=0,
-                showlegend=True,
-                legend=dict(
-                    orientation="v", y=1, yanchor="top",
-                    x=1.02, xanchor="left",
-                    bgcolor="rgba(255,255,255,0.9)",
-                ),
-                plot_bgcolor="white",
-                margin=dict(l=55, r=300, t=90, b=45),
-            )
-            figure.update_xaxes(
-                title_text="Hour", showline=True, linewidth=1,
-                linecolor="black", mirror="all", ticks="outside",
-            )
-            figure.update_yaxes(
-                title_text=f"{energy_label} (MWh)", showline=True, linewidth=1,
-                linecolor="black", mirror="all", ticks="outside",
-            )
-            panel.plotly_chart(figure, use_container_width=True)
+            storage_flows = {
+                technology: series
+                for technology, series in flows.items()
+                if "storage" in technology.lower()
+            }
+            generation_flows = {
+                technology: series
+                for technology, series in flows.items()
+                if technology not in storage_flows
+            }
+
+            def render_flow_chart(chart_flows, chart_title, y_axis_title):
+                figure = go.Figure()
+                for technology, series in sorted(chart_flows.items()):
+                    is_storage_charging = (
+                        "storage charging" in technology.lower()
+                    )
+                    figure.add_trace(go.Scatter(
+                        x=list(range(1, len(series) + 1)),
+                        y=series,
+                        mode="lines",
+                        name=technology,
+                        line=dict(
+                            color=result_technology_color(technology),
+                            dash="dash" if is_storage_charging else "solid",
+                        ),
+                    ))
+                figure.update_layout(
+                    height=chart_height,
+                    width=total_width,
+                    autosize=False,
+                    title_text=chart_title,
+                    title_x=0,
+                    showlegend=True,
+                    legend=dict(
+                        orientation="v", y=1, yanchor="top",
+                        x=1.02, xanchor="left",
+                        bgcolor="rgba(255,255,255,0.9)",
+                    ),
+                    plot_bgcolor="white",
+                    margin=dict(l=55, r=300, t=90, b=45),
+                )
+                figure.update_xaxes(
+                    title_text="Hour", showline=True, linewidth=1,
+                    linecolor="black", mirror="all", ticks="outside",
+                )
+                figure.update_yaxes(
+                    title_text=y_axis_title, showline=True, linewidth=1,
+                    linecolor="black", mirror="all", ticks="outside",
+                )
+                panel.plotly_chart(figure, use_container_width=True)
+
+            if generation_flows:
+                render_flow_chart(
+                    generation_flows,
+                    f"{title} in Scenario {scenario}",
+                    f"{energy_label} (MWh)",
+                )
+            elif not storage_flows:
+                panel.info(
+                    f"No {title.lower()} was found in scenario '{scenario}'."
+                )
+
+            if storage_flows:
+                storage_title = {
+                    "central": "Central thermal storage operation",
+                    "local": "Local thermal storage operation",
+                    "decentralized": "Decentral thermal storage operation",
+                }.get(section_key, "Thermal storage operation")
+                panel.markdown("##### Storage charging and discharging")
+                render_flow_chart(
+                    storage_flows,
+                    f"{storage_title} in Scenario {scenario}",
+                    "Storage heat flow (MWh)",
+                )
 
         def hourly_flow(data, source, target):
             """Return one hourly edge series without double-counting bus views."""
@@ -1732,7 +1813,9 @@ class MultiScenarioViewer:
             panel = st.expander(f"Scenario: {scenario}", expanded=False)
             panel.caption(
                 "Hourly heat and electricity flows are classified from the "
-                "connected buses in sum_flows and can be downloaded as CSV."
+                "connected buses in sum_flows and can be downloaded as CSV. "
+                "Storage discharging is positive; storage charging is shown "
+                "as a negative, dashed trace."
             )
             totals = normalized_sum_flows(data)
             destinations = set(

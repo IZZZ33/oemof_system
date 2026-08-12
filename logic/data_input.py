@@ -9246,8 +9246,8 @@ def run_sources_page(excel_file):
         
         For limited renewable heat pump sources (e.g. ground source, waste water), maximum capacity and annual consumption can be defined on this page.
         
-        Since the nominal value (maximum allowed capacity), full load hours, and maximum annual consumption are interrelated, these values will be adjusted automatically based on the inputs:
-        **Maximum annual consumption = nominal value × full load hours**
+        Since the maximum capacity, full load hours, and annual maximum amount are interrelated, these values will be adjusted automatically based on the inputs:
+        **Annual maximum amount = maximum capacity × full load hours**
     """)
 
     # Keep inputs aligned and at the same height
@@ -9436,11 +9436,11 @@ def run_sources_page(excel_file):
             with col3:
                 ef = dot_number_input("Emission factor (kg/kWh)", src["emission factor"], key=f"src_emission_{i}_{scenario_key}")
             with col4:
-                nv = dot_number_input("Nominal value (kW)", src["nominal value"], key=f"src_nominal_{i}_{scenario_key}")
+                nv = dot_number_input("Max. capacity (kW)", src["nominal value"], key=f"src_nominal_{i}_{scenario_key}")
             with col5:
                 annual_max_value = src.get("annual max")
                 am_str = st.text_input(
-                    "Annual max (kWh) (optional)",
+                    "Annual max. amount (kWh) (optional)",
                     value=(
                         ""
                         if annual_max_value is None or pd.isna(annual_max_value)
@@ -9455,7 +9455,7 @@ def run_sources_page(excel_file):
             if flt_val is None or np.isnan(flt_val):
                 flt_val = 8760.0
             with col6:
-                flt = dot_number_input("Full load (h)", flt_val, key=f"src_full_{i}_{scenario_key}")
+                flt = dot_number_input("Max. full load hours (h)", src["full load time"], key=f"src_full_{i}_{scenario_key}")
 
             capacity_inputs_changed = any(
                 (
